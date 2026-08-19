@@ -1,15 +1,28 @@
-# Anti-Procrastination Task Manager
+# Get It Done (GID)
 
-A high-pressure, gamified task manager designed for students or multitasking persons. It uses stakes, rewards, punishments, and AI integration to enforce discipline and task completion.
+A brutalist, anti-procrastination task manager designed for maximum focus and accountability. 
 
-## Features
-- Track tasks across DSA, Development, Assignments, and Ideas.
-- Strict state tracking ("Left Off At").
-- Strike System and Wall of Shame.
-- AI Integration API for external agent monitoring.
+## Overview
+GID strips away "feel-good" productivity fluff. It relies on strict timeboxing (Pomodoro), daily accountability records, and a severe strike system with real consequences to force you to execute your mandates.
 
 ## Tech Stack
-- **Frontend:** React (Vite), Tailwind CSS
-- **Backend:** Node.js, Express, MongoDB
+- **Frontend:** React, TypeScript, Vite, TailwindCSS
+- **Backend:** Node.js, Express, MongoDB Atlas
 
+## Getting Started
 
+### 1. Backend Setup
+```bash
+cd backend
+npm install
+# Ensure you have a .env file with MONGO_URI and PORT=5000
+npm run dev
+```
+
+### 2. Frontend Setup
+```bash
+cd frontend
+npm install
+npm run dev
+```
+The application will be available at `http://localhost:5173`.

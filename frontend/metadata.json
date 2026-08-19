@@ -1,0 +1,6 @@
+{
+  "name": "Personal Accountability System",
+  "description": "Personal command center to track commitments, timer sessions, project states, goals, rewards, strikes, and Jarvis agent integration.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

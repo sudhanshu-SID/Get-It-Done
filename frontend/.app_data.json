@@ -1,0 +1,445 @@
+{
+  "userSettings": {
+    "userName": "Sid",
+    "timezone": "Asia/Kolkata",
+    "defaultTaskDuration": 45,
+    "strikeThreshold": 10,
+    "agentApiKey": "jarvis_sec_kw87apa39x8a",
+    "agentPermissions": {
+      "read_tasks": true,
+      "read_projects": true,
+      "read_goals": true,
+      "read_history": true,
+      "read_analytics": true,
+      "update_tasks": true,
+      "complete_tasks": true,
+      "create_logs": true
+    },
+    "customCategories": [
+      "DSA",
+      "Development",
+      "AI Project",
+      "Assignment",
+      "Personal",
+      "Fitness"
+    ]
+  },
+  "tasks": [
+    {
+      "_id": "task-1787164262878-0gyj",
+      "title": "dgasdg",
+      "description": "",
+      "category": "DSA",
+      "status": "in_progress",
+      "priority": "high",
+      "commitmentLevel": "required",
+      "scheduledDate": "2026-08-19",
+      "dueDate": "2026-08-19",
+      "estimatedMinutes": 45,
+      "actualMinutes": 0,
+      "recurrence": "none",
+      "notes": "",
+      "createdAt": "2026-08-19T18:31:02.878Z",
+      "updatedAt": "2026-08-19T18:32:00.608Z"
+    },
+    {
+      "_id": "task-1",
+      "title": "Solve 2 DSA graph problems (Topological Sort / Dijkstra)",
+      "description": "LeetCode 207 & 210 with time and space complexity notes",
+      "category": "DSA",
+      "status": "in_progress",
+      "priority": "high",
+      "commitmentLevel": "required",
+      "scheduledDate": "2026-08-19",
+      "dueDate": "2026-08-19",
+      "estimatedMinutes": 60,
+      "actualMinutes": 42,
+      "recurrence": "daily",
+      "createdAt": "2026-08-19T08:00:00.000Z",
+      "updatedAt": "2026-08-19T11:00:00.000Z"
+    },
+    {
+      "_id": "task-2",
+      "title": "AI Assistant - Create 10 evaluation test cases",
+      "description": "Write test assertions for memory retrieval accuracy under high context noise",
+      "category": "AI Project",
+      "projectId": "proj-1",
+      "projectName": "AI Personal Assistant",
+      "status": "todo",
+      "priority": "high",
+      "commitmentLevel": "required",
+      "scheduledDate": "2026-08-19",
+      "dueDate": "2026-08-19",
+      "estimatedMinutes": 90,
+      "actualMinutes": 45,
+      "recurrence": "none",
+      "createdAt": "2026-08-19T08:00:00.000Z",
+      "updatedAt": "2026-08-19T08:00:00.000Z"
+    },
+    {
+      "_id": "task-3",
+      "title": "Complete Distributed Systems Assignment #2",
+      "description": "Raft consensus replication log simulation write-up",
+      "category": "Assignment",
+      "status": "todo",
+      "priority": "medium",
+      "commitmentLevel": "required",
+      "scheduledDate": "2026-08-19",
+      "dueDate": "2026-08-19",
+      "estimatedMinutes": 45,
+      "actualMinutes": 0,
+      "recurrence": "none",
+      "createdAt": "2026-08-19T08:00:00.000Z",
+      "updatedAt": "2026-08-19T08:00:00.000Z"
+    },
+    {
+      "_id": "task-4",
+      "title": "30 min fullstack architecture refactoring",
+      "description": "Clean service layer abstractions and thin controllers",
+      "category": "Development",
+      "status": "completed",
+      "priority": "medium",
+      "commitmentLevel": "optional",
+      "scheduledDate": "2026-08-19",
+      "dueDate": "2026-08-19",
+      "estimatedMinutes": 30,
+      "actualMinutes": 35,
+      "recurrence": "daily",
+      "completedAt": "2026-08-19T10:30:00.000Z",
+      "createdAt": "2026-08-19T07:30:00.000Z",
+      "updatedAt": "2026-08-19T10:30:00.000Z"
+    },
+    {
+      "_id": "task-5",
+      "title": "Read technical paper: Distributed Transaction Isolation",
+      "description": "Notes on snapshot isolation vs serializable in Spanner",
+      "category": "Personal",
+      "status": "completed",
+      "priority": "low",
+      "commitmentLevel": "optional",
+      "scheduledDate": "2026-08-19",
+      "dueDate": "2026-08-19",
+      "estimatedMinutes": 25,
+      "actualMinutes": 25,
+      "recurrence": "none",
+      "completedAt": "2026-08-19T09:00:00.000Z",
+      "createdAt": "2026-08-19T07:30:00.000Z",
+      "updatedAt": "2026-08-19T09:00:00.000Z"
+    },
+    {
+      "_id": "task-y-1",
+      "title": "Solve 2 Binary Tree DFS problems",
+      "category": "DSA",
+      "status": "completed",
+      "priority": "high",
+      "commitmentLevel": "required",
+      "scheduledDate": "2026-08-18",
+      "dueDate": "2026-08-18",
+      "estimatedMinutes": 60,
+      "actualMinutes": 55,
+      "completedAt": "2026-08-18T12:00:00.000Z",
+      "createdAt": "2026-08-18T08:00:00.000Z",
+      "updatedAt": "2026-08-18T12:00:00.000Z"
+    },
+    {
+      "_id": "task-y-2",
+      "title": "AI Assistant memory storage implementation",
+      "category": "AI Project",
+      "projectId": "proj-1",
+      "projectName": "AI Personal Assistant",
+      "status": "completed",
+      "priority": "high",
+      "commitmentLevel": "required",
+      "scheduledDate": "2026-08-18",
+      "dueDate": "2026-08-18",
+      "estimatedMinutes": 120,
+      "actualMinutes": 110,
+      "completedAt": "2026-08-18T17:00:00.000Z",
+      "createdAt": "2026-08-18T08:00:00.000Z",
+      "updatedAt": "2026-08-18T17:00:00.000Z"
+    },
+    {
+      "_id": "task-y-3",
+      "title": "Financial platform Stripe webhook handler",
+      "category": "Development",
+      "projectId": "proj-2",
+      "projectName": "Financial Consultancy Platform",
+      "status": "completed",
+      "priority": "medium",
+      "commitmentLevel": "required",
+      "scheduledDate": "2026-08-18",
+      "dueDate": "2026-08-18",
+      "estimatedMinutes": 60,
+      "actualMinutes": 65,
+      "completedAt": "2026-08-18T19:30:00.000Z",
+      "createdAt": "2026-08-18T08:00:00.000Z",
+      "updatedAt": "2026-08-18T19:30:00.000Z"
+    },
+    {
+      "_id": "task-y-4",
+      "title": "Draft Chapter 4 literature review",
+      "category": "Assignment",
+      "status": "todo",
+      "priority": "medium",
+      "commitmentLevel": "required",
+      "scheduledDate": "2026-08-18",
+      "dueDate": "2026-08-18",
+      "estimatedMinutes": 45,
+      "actualMinutes": 0,
+      "createdAt": "2026-08-18T08:00:00.000Z",
+      "updatedAt": "2026-08-18T08:00:00.000Z"
+    }
+  ],
+  "taskSessions": [
+    {
+      "_id": "sess-1",
+      "taskId": "task-1",
+      "taskTitle": "Solve 2 DSA graph problems (Topological Sort / Dijkstra)",
+      "category": "DSA",
+      "startTime": "2026-08-19T10:18:00.000Z",
+      "endTime": "2026-08-19T11:00:00.000Z",
+      "durationSeconds": 2520,
+      "date": "2026-08-19",
+      "createdAt": "2026-08-19T11:00:00.000Z"
+    },
+    {
+      "_id": "sess-2",
+      "taskId": "task-2",
+      "taskTitle": "AI Assistant - Create 10 evaluation test cases",
+      "category": "AI Project",
+      "projectId": "proj-1",
+      "startTime": "2026-08-19T08:30:00.000Z",
+      "endTime": "2026-08-19T09:15:00.000Z",
+      "durationSeconds": 2700,
+      "date": "2026-08-19",
+      "createdAt": "2026-08-19T09:15:00.000Z"
+    },
+    {
+      "_id": "sess-3",
+      "taskId": "task-4",
+      "taskTitle": "30 min fullstack architecture refactoring",
+      "category": "Development",
+      "startTime": "2026-08-19T09:55:00.000Z",
+      "endTime": "2026-08-19T10:30:00.000Z",
+      "durationSeconds": 2100,
+      "date": "2026-08-19",
+      "createdAt": "2026-08-19T10:30:00.000Z"
+    },
+    {
+      "_id": "sess-4",
+      "taskId": "task-5",
+      "taskTitle": "Read technical paper: Distributed Transaction Isolation",
+      "category": "Personal",
+      "startTime": "2026-08-19T08:35:00.000Z",
+      "endTime": "2026-08-19T09:00:00.000Z",
+      "durationSeconds": 1500,
+      "date": "2026-08-19",
+      "createdAt": "2026-08-19T09:00:00.000Z"
+    }
+  ],
+  "activeTimer": null,
+  "projects": [
+    {
+      "_id": "proj-1",
+      "name": "AI Personal Assistant",
+      "description": "Autonomous accountability & memory assistant with retrieval engine",
+      "status": "active",
+      "priority": "high",
+      "currentPhase": "Phase 3 - Memory & Retrieval",
+      "currentState": "Memory retrieval evaluation and benchmark tests",
+      "lastCompleted": "Memory persistence and vector embedding store sync",
+      "nextAction": "Create 10 evaluation test cases for cross-session recall",
+      "notes": "Focus on deterministic latency (<150ms) and precision.",
+      "totalTimeMinutes": 540,
+      "createdAt": "2026-08-01T00:00:00.000Z",
+      "updatedAt": "2026-08-18T10:00:00.000Z"
+    },
+    {
+      "_id": "proj-2",
+      "name": "Financial Consultancy Platform",
+      "description": "SaaS portal for corporate tax planning and portfolio audits",
+      "status": "active",
+      "priority": "medium",
+      "currentPhase": "Phase 2 - Client Portal",
+      "currentState": "Auth integration & Stripe recurring billing webhooks",
+      "lastCompleted": "Webhook idempotency and signature validation",
+      "nextAction": "Add PDF invoice auto-generator service",
+      "notes": "Deploy to Cloud Run by end of month.",
+      "totalTimeMinutes": 320,
+      "createdAt": "2026-08-05T00:00:00.000Z",
+      "updatedAt": "2026-08-17T15:00:00.000Z"
+    }
+  ],
+  "goals": [
+    {
+      "_id": "goal-1",
+      "title": "DSA: 30 Graph & Tree Problems",
+      "description": "Focus on Topological Sort, Dijkstra, Prim, and Binary Tree traversals",
+      "type": "task_count",
+      "targetValue": 30,
+      "currentValue": 19,
+      "unit": "problems",
+      "category": "DSA",
+      "startDate": "2026-08-01",
+      "endDate": "2026-08-31",
+      "status": "active",
+      "createdAt": "2026-08-01T00:00:00.000Z",
+      "updatedAt": "2026-08-19T11:00:00.000Z"
+    },
+    {
+      "_id": "goal-2",
+      "title": "Development: 15 Hours Weekly Deep Work",
+      "description": "Focused coding sessions across AI Assistant and SaaS portal",
+      "type": "time_spent",
+      "targetValue": 15,
+      "currentValue": 11.5,
+      "unit": "hours",
+      "category": "Development",
+      "startDate": "2026-08-17",
+      "endDate": "2026-08-23",
+      "status": "active",
+      "createdAt": "2026-08-17T00:00:00.000Z",
+      "updatedAt": "2026-08-19T11:00:00.000Z"
+    },
+    {
+      "_id": "goal-3",
+      "title": "AI Assistant Phase 3 Completion",
+      "description": "Ship deterministic retrieval engine & latency benchmarks",
+      "type": "completion_rate",
+      "targetValue": 100,
+      "currentValue": 75,
+      "unit": "%",
+      "category": "AI Project",
+      "startDate": "2026-08-10",
+      "endDate": "2026-08-25",
+      "status": "active",
+      "createdAt": "2026-08-10T00:00:00.000Z",
+      "updatedAt": "2026-08-19T11:00:00.000Z"
+    }
+  ],
+  "rewards": [
+    {
+      "_id": "rew-1",
+      "title": "Celebratory Dinner at Japanese Izakaya",
+      "description": "Reward for completing 15-day continuous required commitment streak",
+      "requirement": "Complete DSA & core development commitments 15 days in a row",
+      "linkedGoalId": "goal-1",
+      "linkedGoalTitle": "DSA: 30 Graph & Tree Problems",
+      "value": "Omakase / Ramen dinner",
+      "status": "unlocked",
+      "unlockedAt": "2026-08-18T20:00:00.000Z",
+      "createdAt": "2026-08-01T00:00:00.000Z"
+    },
+    {
+      "_id": "rew-2",
+      "title": "Dedicated Weekend Gaming & Sci-Fi Marathon",
+      "description": "Uninterrupted 48h gaming session guilt-free",
+      "requirement": "Complete AI Assistant Phase 3 and all benchmarks by Friday",
+      "linkedGoalId": "goal-3",
+      "linkedGoalTitle": "AI Assistant Phase 3 Completion",
+      "value": "Gaming Weekend",
+      "status": "locked",
+      "createdAt": "2026-08-10T00:00:00.000Z"
+    },
+    {
+      "_id": "rew-3",
+      "title": "Mechanical Keyboard Upgrade (Keychron Q1 Pro)",
+      "description": "High-end typing hardware upgrade for achieving monthly targets",
+      "requirement": "Hit 90%+ required commitment completion rate for August",
+      "value": "Keychron Q1 Pro",
+      "status": "locked",
+      "createdAt": "2026-08-01T00:00:00.000Z"
+    }
+  ],
+  "consequences": [
+    {
+      "_id": "con-1",
+      "title": "No Outside Food / Takeout for 24h",
+      "type": "restriction",
+      "description": "Only home-cooked meals if required daily DSA problem is skipped",
+      "trigger": "Missed required DSA commitment",
+      "value": "Diet restriction 24h",
+      "status": "active",
+      "createdAt": "2026-08-01T00:00:00.000Z"
+    },
+    {
+      "_id": "con-2",
+      "title": "₹500 Penalty to Accountability Partner",
+      "type": "financial",
+      "description": "Mandatory UPI transfer if 10 active strikes accumulate in a single month",
+      "trigger": "10 strikes reached in 30-day window",
+      "value": "₹500",
+      "status": "active",
+      "createdAt": "2026-08-01T00:00:00.000Z"
+    }
+  ],
+  "strikes": [
+    {
+      "_id": "strike-1",
+      "number": 1,
+      "reason": "Missed daily DSA commitment (0/2 problems solved)",
+      "date": "2026-08-12",
+      "severity": "medium",
+      "consequenceId": "con-1",
+      "consequenceTitle": "No Outside Food / Takeout for 24h",
+      "consequenceValue": "Diet restriction 24h",
+      "status": "resolved",
+      "notes": "Resumed next day and solved 4 problems.",
+      "createdAt": "2026-08-12T23:59:00.000Z"
+    },
+    {
+      "_id": "strike-2",
+      "number": 2,
+      "reason": "Missed required literature review draft deadline",
+      "date": "2026-08-18",
+      "taskId": "task-y-4",
+      "taskTitle": "Draft Chapter 4 literature review",
+      "severity": "low",
+      "status": "open",
+      "notes": "Scheduled for makeup today.",
+      "createdAt": "2026-08-18T23:59:00.000Z"
+    }
+  ],
+  "dailyRecords": [
+    {
+      "_id": "dr-yesterday",
+      "date": "2026-08-18",
+      "timezone": "Asia/Kolkata",
+      "requiredTaskIds": [
+        "task-y-1",
+        "task-y-2",
+        "task-y-3",
+        "task-y-4"
+      ],
+      "completedTaskIds": [
+        "task-y-1",
+        "task-y-2",
+        "task-y-3"
+      ],
+      "missedTaskIds": [
+        "task-y-4"
+      ],
+      "totalWorkSeconds": 15120,
+      "status": "partial",
+      "dailyNote": "Good focus in morning and afternoon. Missed assignment due to deep work on AI memory.",
+      "createdAt": "2026-08-18T23:59:00.000Z",
+      "updatedAt": "2026-08-18T23:59:00.000Z"
+    }
+  ],
+  "accountabilityLogs": [
+    {
+      "_id": "log-1",
+      "actor": "Jarvis",
+      "action": "morning_briefing",
+      "message": "Inspected 3 required commitments for today. Highest priority: DSA Graphs and AI Assistant test cases.",
+      "timestamp": "2026-08-19T08:00:15.000Z"
+    },
+    {
+      "_id": "log-2",
+      "actor": "Jarvis",
+      "action": "midday_check",
+      "message": "Verified 147m of deep work tracked. DSA session in progress (42m). No overdue alerts yet.",
+      "timestamp": "2026-08-19T11:05:00.000Z"
+    }
+  ]
+}
