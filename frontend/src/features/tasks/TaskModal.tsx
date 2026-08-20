@@ -6,7 +6,7 @@ interface TaskModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: (taskData: Partial<Task>) => Promise<void>;
-  initialTask?: Task | null;
+  initialTask?: Partial<Task> | null;
   projects: Project[];
   categories: string[];
   defaultDate?: string;
@@ -38,14 +38,14 @@ export const TaskModal: React.FC<TaskModalProps> = ({
 
   useEffect(() => {
     if (initialTask) {
-      setTitle(initialTask.title);
+      setTitle(initialTask.title || '');
       setDescription(initialTask.description || '');
       setCategory(initialTask.category || 'DSA');
       setProjectId(initialTask.projectId || '');
-      setPriority(initialTask.priority);
-      setCommitmentLevel(initialTask.commitmentLevel);
-      setScheduledDate(initialTask.scheduledDate);
-      setDueDate(initialTask.dueDate || initialTask.scheduledDate);
+      setPriority(initialTask.priority || 'medium');
+      setCommitmentLevel(initialTask.commitmentLevel || 'optional');
+      setScheduledDate(initialTask.scheduledDate || defaultDate || today);
+      setDueDate(initialTask.dueDate || initialTask.scheduledDate || defaultDate || today);
       setEstimatedMinutes(initialTask.estimatedMinutes || 45);
       setRecurrence(initialTask.recurrence || 'none');
       setNotes(initialTask.notes || '');

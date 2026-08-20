@@ -21,7 +21,10 @@ interface ProjectListProps {
   onOpenContextEditModal: (project: Project) => void;
   onDeleteProject: (id: string) => Promise<void>;
   onStartTimer: (taskId: string) => Promise<void>;
-  onCompleteTask: (taskId: string) => Promise<void>;
+  onCompleteTask: (task: Task) => Promise<void>;
+  onUncompleteTask: (taskId: string) => Promise<void>;
+  onCreateTaskForProject: (projectId: string) => void;
+  onStartProjectTimer: (projectId: string) => Promise<void>;
 }
 
 export const ProjectList: React.FC<ProjectListProps> = ({
@@ -32,7 +35,10 @@ export const ProjectList: React.FC<ProjectListProps> = ({
   onOpenContextEditModal,
   onDeleteProject,
   onStartTimer,
-  onCompleteTask
+  onCompleteTask,
+  onUncompleteTask,
+  onCreateTaskForProject,
+  onStartProjectTimer
 }) => {
   const [selectedProjectId, setSelectedProjectId] = useState<string>(projects[0]?._id || '');
 
@@ -201,6 +207,22 @@ export const ProjectList: React.FC<ProjectListProps> = ({
                   <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-[#141414]">
                     Assigned Tasks ({projectTasks.filter(t => t.status === 'completed').length}/{projectTasks.length})
                   </h3>
+                  <div className="flex items-center space-x-2">
+                    <button
+                      onClick={() => onStartProjectTimer(activeProject._id)}
+                      className="flex items-center space-x-1 border border-[#141414] bg-white px-2 py-1 text-[10px] font-mono font-bold uppercase text-[#141414] hover:bg-gray-100 cursor-pointer"
+                    >
+                      <Play className="h-3 w-3" />
+                      <span>Quick Timer</span>
+                    </button>
+                    <button
+                      onClick={() => onCreateTaskForProject(activeProject._id)}
+                      className="flex items-center space-x-1 border border-[#141414] bg-[#141414] px-2 py-1 text-[10px] font-mono font-bold uppercase text-white hover:bg-black cursor-pointer"
+                    >
+                      <Plus className="h-3 w-3" />
+                      <span>Add Task</span>
+                    </button>
+                  </div>
                 </div>
 
                 {projectTasks.length === 0 ? (
@@ -218,7 +240,7 @@ export const ProjectList: React.FC<ProjectListProps> = ({
                         >
                           <div className="flex items-center space-x-2.5">
                             <button
-                              onClick={() => onCompleteTask(t._id)}
+                              onClick={() => isCompleted ? onUncompleteTask(t._id) : onCompleteTask(t)}
                               className="opacity-70 group-hover:opacity-100 cursor-pointer shrink-0"
                             >
                               {isCompleted ? (

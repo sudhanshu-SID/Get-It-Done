@@ -26,7 +26,8 @@ import { TodayDashboardData, Task, Project, ActiveTimer } from '../../types/inde
 interface TodayDashboardProps {
   data: TodayDashboardData;
   activeTimer: ActiveTimer | null;
-  onCompleteTask: (taskId: string) => Promise<void>;
+  onCompleteTask: (task: Task) => Promise<void>;
+  onUncompleteTask: (taskId: string) => Promise<void>;
   onStartTimer: (taskId: string) => Promise<void>;
   onPauseTimer: () => void;
   onResumeTimer: () => void;
@@ -44,6 +45,7 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
   data,
   activeTimer,
   onCompleteTask,
+  onUncompleteTask,
   onStartTimer,
   onPauseTimer,
   onResumeTimer,
@@ -213,12 +215,12 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
                   {activeTimer.category}
                 </span>
                 <span>·</span>
-                <span>{activeTimer.isPaused ? 'TIMER PAUSED' : 'SESSION RECORDING RUNNING'}</span>
+                <span>{activeTimer.status === 'paused' ? 'TIMER PAUSED' : 'SESSION RECORDING RUNNING'}</span>
               </div>
             </div>
 
             <div className="flex items-center space-x-2">
-              {activeTimer.isPaused ? (
+              {activeTimer.status === 'paused' ? (
                 <button
                   id="resume-working-timer-btn"
                   onClick={onResumeTimer}
@@ -304,7 +306,7 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
                         <div className="flex items-start space-x-3 flex-1 min-w-0">
                           <button
                             id={`complete-task-${task._id}-btn`}
-                            onClick={() => onCompleteTask(task._id)}
+                            onClick={() => isCompleted ? onUncompleteTask(task._id) : onCompleteTask(task)}
                             className="mt-0.5 focus:outline-none cursor-pointer shrink-0"
                             title={isCompleted ? 'Mark incomplete' : 'Mark completed'}
                           >
@@ -461,7 +463,7 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
                       >
                         <div className="flex items-center space-x-2.5">
                           <button
-                            onClick={() => onCompleteTask(task._id)}
+                            onClick={() => isCompleted ? onUncompleteTask(task._id) : onCompleteTask(task)}
                             className="opacity-60 group-hover:opacity-100 cursor-pointer"
                           >
                             {isCompleted ? (

@@ -8,6 +8,8 @@ const Strike = require('../models/Strike');
 const Consequence = require('../models/Consequence');
 const ActiveTimer = require('../models/ActiveTimer');
 const TaskSession = require('../models/TaskSession');
+const UserSettings = require('../models/UserSettings');
+const DailyRecord = require('../models/DailyRecord');
 
 const makeCrud = (model, path) => {
   router.get(path, async (req, res) => {
@@ -40,7 +42,103 @@ makeCrud(Consequence, '/consequences');
 makeCrud(Strike, '/strikes');
 
 router.post('/tasks/:id/complete', async (req, res) => {
-  try { res.json({ success: true, data: await Task.findByIdAndUpdate(req.params.id, {status: 'completed', completedAt: new Date().toISOString()}, {new: true}) }); }
+  try {
+    const updateData = {status: 'completed', completedAt: new Date().toISOString()};
+    if (req.body && req.body.questionsSolved) {
+      updateData.questionsSolved = req.body.questionsSolved;
+    }
+    const task = await Task.findByIdAndUpdate(req.params.id, updateData, {new: true});
+    
+    if (task) {
+      const goals = await Goal.find({ status: 'active', type: 'task_count', category: task.category });
+      for (const goal of goals) {
+        if (task.category === 'DSA' && task.questionsSolved) {
+          goal.currentValue += task.questionsSolved;
+        } else {
+          goal.currentValue += 1;
+        }
+        if (goal.currentValue >= goal.targetValue) {
+          goal.status = 'achieved';
+          await Reward.updateMany(
+            { linkedGoalId: goal._id.toString(), status: 'locked' },
+            { $set: { status: 'unlocked', unlockedAt: new Date().toISOString() } }
+          );
+        }
+        await goal.save();
+      }
+      
+      const todayStr = new Date().toISOString().split('T')[0];
+      let dailyRecord = await DailyRecord.findOne({ date: todayStr });
+      if (dailyRecord) {
+        if (!dailyRecord.completedTaskIds) dailyRecord.completedTaskIds = [];
+        if (!dailyRecord.completedTaskIds.includes(task._id.toString())) {
+          dailyRecord.completedTaskIds.push(task._id.toString());
+          dailyRecord.status = 'completed';
+          await dailyRecord.save();
+        }
+      } else {
+        await DailyRecord.create({
+          date: todayStr,
+          completedTaskIds: [task._id.toString()],
+          status: 'completed'
+        });
+      }
+    }
+    
+    res.json({ success: true, data: task });
+  }
+  catch(e) { res.status(500).json({ success: false, message: e.message }); }
+});
+router.post('/tasks/:id/uncomplete', async (req, res) => {
+  try {
+    const task = await Task.findById(req.params.id);
+    if (!task) return res.status(404).json({ success: false, message: 'Task not found' });
+    
+    // Reverse goal progress
+    const goals = await Goal.find({ 
+      category: task.category,
+      type: 'task_count',
+      status: { $in: ['active', 'achieved'] }
+    });
+    
+    for (const goal of goals) {
+      if (task.category === 'DSA' && task.questionsSolved) {
+        goal.currentValue = Math.max(0, goal.currentValue - task.questionsSolved);
+      } else {
+        goal.currentValue = Math.max(0, goal.currentValue - 1);
+      }
+      if (goal.currentValue < goal.targetValue && goal.status === 'achieved') {
+        goal.status = 'active';
+        await Reward.updateMany(
+          { linkedGoalId: goal._id.toString(), status: { $in: ['unlocked', 'redeemed'] } },
+          { $set: { status: 'locked', unlockedAt: null, redeemedAt: null } }
+        );
+      }
+      await goal.save();
+    }
+    
+    // Reverse daily record
+    if (task.completedAt) {
+      const completedDateStr = task.completedAt.split('T')[0];
+      const dailyRecord = await DailyRecord.findOne({ date: completedDateStr });
+      if (dailyRecord && dailyRecord.completedTaskIds) {
+        dailyRecord.completedTaskIds = dailyRecord.completedTaskIds.filter(id => id !== task._id.toString());
+        if (dailyRecord.completedTaskIds.length === 0 && dailyRecord.totalWorkSeconds === 0) {
+           dailyRecord.status = 'no_progress';
+        }
+        await dailyRecord.save();
+      }
+    }
+
+    task.status = 'todo';
+    task.completedAt = null;
+    if (task.category === 'DSA') {
+      task.questionsSolved = 0;
+    }
+    await task.save();
+
+    res.json({ success: true, data: task });
+  }
   catch(e) { res.status(500).json({ success: false, message: e.message }); }
 });
 router.post('/tasks/:id/reschedule', async (req, res) => {
@@ -127,6 +225,27 @@ router.get('/tasks/:id/sessions', async (req, res) => {
 
 router.get('/daily/today', async (req, res) => {
   try {
+    const todayStr = new Date().toISOString().split('T')[0];
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    
+    // Reset completed recurring tasks if the day has changed
+    await Task.updateMany(
+      { 
+        recurrence: { $ne: 'none' },
+        status: 'completed',
+        updatedAt: { $lt: startOfToday }
+      },
+      {
+        $set: {
+          status: 'todo',
+          scheduledDate: todayStr,
+          actualMinutes: 0,
+          completedAt: null
+        }
+      }
+    );
+
     const tasks = await Task.find();
     const projects = await Project.find();
     
@@ -136,12 +255,32 @@ router.get('/daily/today', async (req, res) => {
     const completedOptional = optional.filter(t => t.status === 'completed').length;
     const totalRequired = required.length;
     
+    const allCompletedRecords = await DailyRecord.find({ status: 'completed' }).sort({ date: -1 });
+    let currentStreak = 0;
+    let expectedDate = new Date();
+    expectedDate.setHours(0, 0, 0, 0);
+    for (let i = 0; i < 365; i++) {
+      const dateStr = expectedDate.toISOString().split('T')[0];
+      const record = allCompletedRecords.find(r => r.date === dateStr);
+      if (record) {
+        currentStreak++;
+      } else if (i !== 0) {
+        break;
+      }
+      expectedDate.setDate(expectedDate.getDate() - 1);
+    }
+
+    let settings = await UserSettings.findOne();
+    if (!settings) {
+      settings = { userName: 'Commander', timezone: 'UTC' };
+    }
+
     res.json({
       success: true,
       data: {
         date: new Date().toISOString().split('T')[0],
         formattedDate: new Date().toDateString(),
-        user: { name: 'Commander', timezone: 'UTC' },
+        user: { name: settings.userName, timezone: settings.timezone },
         summary: { 
           totalRequired, 
           completedRequired, 
@@ -151,7 +290,7 @@ router.get('/daily/today', async (req, res) => {
           completionRate: totalRequired ? Math.round((completedRequired / totalRequired)*100) : 100, 
           totalTrackedMinutesToday: tasks.reduce((sum, t) => sum + (t.actualMinutes||0), 0), 
           currentStrikes: 0, 
-          currentStreak: 0 
+          currentStreak
         },
         requiredTasks: required,
         optionalTasks: optional,
@@ -169,7 +308,95 @@ router.post('/daily/today/no-progress', (req, res) => res.json({ success: true, 
 router.post('/daily/note', (req, res) => res.json({ success: true, data: {} }));
 router.get('/daily/yesterday', (req, res) => res.json({ success: true, data: null }));
 
-router.get('/settings', (req, res) => res.json({ success: true, data: { userName: 'Commander', timezone: 'UTC', defaultTaskDuration: 25, strikeThreshold: 3, agentApiKey: '', customCategories: ['DSA', 'DEV'] }}));
-router.get('/analytics', (req, res) => res.json({ success: true, data: { period: 'all', totalMinutes: 0, totalTasksCompleted: 0, totalTasksMissed: 0, completionRate: 0, requiredCompletionRate: 0, timeByCategory: [], timeByProject: [], dailyWorkHistory: [], strikeHistory: {total:0, open:0, resolved:0, byMonth:[]} }}));
+router.get('/settings', async (req, res) => {
+  try {
+    let settings = await UserSettings.findOne();
+    if (!settings) {
+      settings = await UserSettings.create({});
+    }
+    res.json({ success: true, data: settings });
+  } catch(e) {
+    res.status(500).json({ success: false, message: e.message });
+  }
+});
+
+router.patch('/settings', async (req, res) => {
+  try {
+    let settings = await UserSettings.findOne();
+    if (!settings) {
+      settings = new UserSettings();
+    }
+    Object.assign(settings, req.body);
+    await settings.save();
+    res.json({ success: true, data: settings });
+  } catch(e) {
+    res.status(500).json({ success: false, message: e.message });
+  }
+});
+
+router.get('/analytics', async (req, res) => {
+  try {
+    const tasks = await Task.find();
+    const sessions = await TaskSession.find({ isActive: false });
+    const dailyRecords = await DailyRecord.find();
+    
+    let totalMinutes = 0;
+    const timeByCategory = {};
+    const timeByProject = {};
+    
+    // Group time by category and project
+    for (const session of sessions) {
+      if (session.durationMinutes > 0) {
+        totalMinutes += session.durationMinutes;
+        const task = tasks.find(t => t._id.toString() === session.taskId);
+        if (task) {
+          if (task.category) {
+            timeByCategory[task.category] = (timeByCategory[task.category] || 0) + session.durationMinutes;
+          }
+          if (task.projectId) {
+            timeByProject[task.projectId] = (timeByProject[task.projectId] || 0) + session.durationMinutes;
+          }
+        }
+      }
+    }
+    
+    const timeByCategoryArray = Object.keys(timeByCategory).map(name => ({ name, minutes: timeByCategory[name] }));
+    const timeByProjectArray = Object.keys(timeByProject).map(id => ({ id, minutes: timeByProject[id] }));
+    
+    const completedTasks = tasks.filter(t => t.status === 'completed');
+    const totalTasksCompleted = completedTasks.length;
+    
+    let requiredTasksCompleted = 0;
+    let requiredTasksTotal = 0;
+    
+    tasks.forEach(t => {
+      if (t.commitmentLevel === 'required') {
+        requiredTasksTotal++;
+        if (t.status === 'completed') requiredTasksCompleted++;
+      }
+    });
+    
+    const requiredCompletionRate = requiredTasksTotal > 0 ? Math.round((requiredTasksCompleted / requiredTasksTotal) * 100) : 100;
+    const completionRate = tasks.length > 0 ? Math.round((totalTasksCompleted / tasks.length) * 100) : 100;
+    
+    res.json({ 
+      success: true, 
+      data: { 
+        period: 'all', 
+        totalMinutes, 
+        totalTasksCompleted, 
+        totalTasksMissed: tasks.filter(t => t.status === 'missed').length, 
+        completionRate, 
+        requiredCompletionRate, 
+        timeByCategory: timeByCategoryArray, 
+        timeByProject: timeByProjectArray, 
+        dailyWorkHistory: dailyRecords, 
+        strikeHistory: {total:0, open:0, resolved:0, byMonth:[]} 
+      }
+    });
+  } catch(e) {
+    res.status(500).json({ success: false, message: e.message });
+  }
+});
 
 module.exports = router;

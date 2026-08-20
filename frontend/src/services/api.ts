@@ -80,8 +80,13 @@ export const apiService = {
     fetchJson<{ message: string }>(`/api/tasks/${id}`, {
       method: 'DELETE'
     }),
-  completeTask: (id: string) =>
+  completeTask: (id: string, data?: any) =>
     fetchJson<Task>(`/api/tasks/${id}/complete`, {
+      method: 'POST',
+      body: data ? JSON.stringify(data) : undefined
+    }),
+  uncompleteTask: (id: string) =>
+    fetchJson<Task>(`/api/tasks/${id}/uncomplete`, {
       method: 'POST'
     }),
   rescheduleTask: (id: string, newDate: string, notes?: string) =>

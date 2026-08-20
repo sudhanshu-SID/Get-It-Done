@@ -9,6 +9,7 @@ const DailyRecord = require('./DailyRecord');
 const AccountabilityLog = require('./AccountabilityLog');
 const AgentPermission = require('./AgentPermission');
 const User = require('./User');
+const UserSettings = require('./UserSettings');
 
 module.exports = {
   Task,
@@ -22,4 +23,5 @@ module.exports = {
   AccountabilityLog,
   AgentPermission,
   User,
+  UserSettings,
 };

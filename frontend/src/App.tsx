@@ -58,7 +58,7 @@ export default function App() {
 
   // Modal States
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
-  const [selectedTaskForEdit, setSelectedTaskForEdit] = useState<Task | null>(null);
+  const [selectedTaskForEdit, setSelectedTaskForEdit] = useState<Partial<Task> | null>(null);
 
   const [isRescheduleModalOpen, setIsRescheduleModalOpen] = useState(false);
   const [selectedTaskForReschedule, setSelectedTaskForReschedule] = useState<Task | null>(null);
@@ -77,6 +77,9 @@ export default function App() {
 
   const [isStrikeModalOpen, setIsStrikeModalOpen] = useState(false);
   const [isAgentInspectorOpen, setIsAgentInspectorOpen] = useState(false);
+  
+  const [dsaPromptTask, setDsaPromptTask] = useState<Task | null>(null);
+  const [dsaQuestionsSolved, setDsaQuestionsSolved] = useState<number>(1);
 
   // Confirm Modal State
   const [confirmConfig, setConfirmConfig] = useState<{
@@ -144,31 +147,49 @@ export default function App() {
 
   // Live Timer Interval (Calculates elapsed seconds live in UI)
   useEffect(() => {
-    if (!activeTimer || activeTimer.isPaused) return;
+    if (!activeTimer || activeTimer.status === 'paused') return;
 
     const interval = setInterval(() => {
       setActiveTimer(prev => {
-        if (!prev || prev.isPaused) return prev;
+        if (!prev || prev.status === 'paused') return prev;
         const now = Date.now();
-        const start = new Date(prev.startedAt).getTime();
-        const elapsed = Math.max(0, Math.floor((now - start) / 1000) - prev.pausedSecondsTotal);
+        const start = new Date(prev.startTime).getTime();
+        const elapsedSinceStart = Math.max(0, Math.floor((now - start) / 1000));
         return {
           ...prev,
-          elapsedSeconds: elapsed
+          elapsedSeconds: (prev.accumulatedSeconds || 0) + elapsedSinceStart
         };
       });
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [activeTimer?.isPaused, activeTimer?.startedAt]);
+  }, [activeTimer?.status, activeTimer?.startTime]);
 
   // Task Actions
-  const handleCompleteTask = async (taskId: string) => {
+  const handleCompleteTask = async (task: Task) => {
+    if (task.category === 'DSA') {
+      setDsaPromptTask(task);
+      setDsaQuestionsSolved(1);
+      return;
+    }
+    await executeTaskCompletion(task);
+  };
+
+  const executeTaskCompletion = async (task: Task, data?: any) => {
     try {
-      await apiService.completeTask(taskId);
+      await apiService.completeTask(task._id, data);
       await refreshAllData();
     } catch (err) {
       console.error('Error completing task', err);
+    }
+  };
+
+  const handleUncompleteTask = async (taskId: string) => {
+    try {
+      await apiService.uncompleteTask(taskId);
+      await refreshAllData();
+    } catch (err) {
+      console.error('Error uncompleting task', err);
     }
   };
 
@@ -179,6 +200,39 @@ export default function App() {
       await refreshAllData();
     } catch (err) {
       console.error('Error starting timer', err);
+    }
+  };
+
+  const handleStartProjectTimer = async (projectId: string) => {
+    try {
+      const project = projects.find(p => p._id === projectId);
+      
+      const existingSessionTask = tasks.find(t => 
+        t.projectId === projectId && 
+        t.title.startsWith('Work Session:') && 
+        t.status !== 'completed'
+      );
+      
+      let targetTaskId = '';
+      if (existingSessionTask) {
+        targetTaskId = existingSessionTask._id;
+      } else {
+        const newTask = await apiService.createTask({
+          title: `Work Session: ${project?.name || 'Project'}`,
+          projectId,
+          category: 'project',
+          commitmentLevel: 'optional',
+          priority: 'medium',
+          scheduledDate: new Date().toISOString().split('T')[0]
+        });
+        targetTaskId = newTask._id;
+      }
+      
+      const updatedTimer = await apiService.startTimer(targetTaskId);
+      setActiveTimer(updatedTimer);
+      await refreshAllData();
+    } catch (err) {
+      console.error('Error starting project timer', err);
     }
   };
 
@@ -211,7 +265,7 @@ export default function App() {
   };
 
   const handleSaveTask = async (taskData: Partial<Task>) => {
-    if (selectedTaskForEdit) {
+    if (selectedTaskForEdit && selectedTaskForEdit._id) {
       await apiService.updateTask(selectedTaskForEdit._id, taskData);
     } else {
       await apiService.createTask(taskData);
@@ -385,6 +439,7 @@ export default function App() {
             data={todayData}
             activeTimer={activeTimer}
             onCompleteTask={handleCompleteTask}
+            onUncompleteTask={handleUncompleteTask}
             onStartTimer={handleStartTimer}
             onPauseTimer={handlePauseTimer}
             onResumeTimer={handleResumeTimer}
@@ -416,6 +471,7 @@ export default function App() {
             categories={currentCategories}
             activeTimer={activeTimer}
             onCompleteTask={handleCompleteTask}
+            onUncompleteTask={handleUncompleteTask}
             onStartTimer={handleStartTimer}
             onStopTimer={handleStopTimer}
             onOpenTaskModal={task => {
@@ -447,6 +503,17 @@ export default function App() {
             onDeleteProject={handleDeleteProject}
             onStartTimer={handleStartTimer}
             onCompleteTask={handleCompleteTask}
+            onUncompleteTask={handleUncompleteTask}
+            onCreateTaskForProject={projectId => {
+              const project = projects.find(p => p._id === projectId);
+              setSelectedTaskForEdit({ 
+                projectId, 
+                projectName: project?.name,
+                category: 'project'
+              } as Partial<Task>);
+              setIsTaskModalOpen(true);
+            }}
+            onStartProjectTimer={handleStartProjectTimer}
           />
         )}
 
@@ -609,7 +676,41 @@ export default function App() {
           <span className="opacity-80">USER: {settings?.name ? settings.name.toUpperCase() : 'ROOT_DEV'}</span>
         </div>
       </footer>
+      {/* DSA Prompt Modal */}
+      {dsaPromptTask && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="bg-[#0a0a0a] border border-[#1a1a1a] p-6 w-full max-w-sm">
+            <h2 className="font-mono text-sm uppercase tracking-wider text-white mb-2">DSA Progress</h2>
+            <p className="text-gray-400 text-xs mb-4">How many questions did you solve for "{dsaPromptTask.title}"?</p>
+            <input 
+              type="number"
+              min="0"
+              value={dsaQuestionsSolved}
+              onChange={(e) => setDsaQuestionsSolved(parseInt(e.target.value) || 0)}
+              className="w-full bg-[#111] border border-[#222] p-2 text-white font-mono text-sm focus:outline-none focus:border-[#444] mb-4"
+              autoFocus
+            />
+            <div className="flex justify-end space-x-3">
+              <button 
+                onClick={() => setDsaPromptTask(null)}
+                className="px-3 py-1.5 text-xs font-mono text-gray-500 hover:text-white transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={async () => {
+                  await executeTaskCompletion(dsaPromptTask, { questionsSolved: dsaQuestionsSolved });
+                  setDsaPromptTask(null);
+                }}
+                className="bg-white text-black px-4 py-1.5 text-xs font-mono font-bold hover:bg-gray-200 transition-colors cursor-pointer"
+              >
+                Complete Task
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
-}
-
+};

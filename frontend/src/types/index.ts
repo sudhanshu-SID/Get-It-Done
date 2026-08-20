@@ -20,6 +20,7 @@ export interface Task {
   recurrence?: RecurrenceType;
   completedAt?: string;
   notes?: string;
+  questionsSolved?: number;
   rescheduleCount?: number;
   rescheduledHistory?: Array<{
     originalDueDate: string;
@@ -44,15 +45,18 @@ export interface TaskSession {
 }
 
 export interface ActiveTimer {
+  _id?: string;
   taskId: string;
   taskTitle: string;
-  category: string;
   projectId?: string;
   projectName?: string;
   startTime: string; // ISO
-  elapsedSeconds: number;
-  isPaused: boolean;
+  status: 'running' | 'paused';
   pausedAt?: string;
+  accumulatedSeconds: number;
+  
+  // Computed on frontend:
+  elapsedSeconds?: number;
 }
 
 export type ProjectStatus = 'active' | 'paused' | 'completed' | 'archived';

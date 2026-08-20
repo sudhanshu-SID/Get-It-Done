@@ -15,11 +15,13 @@
 - Switch package manager from Bun to NPM.
 - Verify React/Vite development server functionality.
 
-## Phase 4: Schema Upgrade & API Integration (PENDING)
+## Phase 4: Schema Upgrade & API Integration (COMPLETED)
 - **Goal:** Connect the complex TS frontend to the JS backend.
-- Upgrade backend Mongoose schemas to match the massive `frontend/src/types/index.ts` models (e.g., CommitmentLevels, DailyRecords, Severities).
-- Wire up `frontend/src/services/api.ts` to hit `http://localhost:5000/api`.
+- Upgraded backend Mongoose schemas to match the frontend/src/types/index.ts models.
+- Wired up frontend/src/services/api.ts to hit the backend API.
+- Live data population implemented for Goals, Analytics, Rewards, Settings, and Streaks.
 
-## Phase 5: Authentication & Deployment (FUTURE)
-- Implement user login/auth (JWT).
-- Deploy backend to Render/Heroku and frontend to Vercel/Netlify.
+## Phase 5: PWA & Deployment (PENDING)
+- Implement PWA requirements (manifest.json, icons, service worker) to make the web app installable on mobile devices.
+- Deploy backend to Render/Railway for persistent websocket/timer connections.
+- Deploy frontend to Vercel.

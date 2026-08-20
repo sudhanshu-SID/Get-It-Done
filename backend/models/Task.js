@@ -16,6 +16,7 @@ const TaskSchema = new mongoose.Schema({
   recurrence: { type: String, enum: ['none', 'daily', 'weekly', 'weekdays'], default: 'none' },
   completedAt: String,
   notes: String,
+  questionsSolved: { type: Number, default: 0 },
   rescheduleCount: { type: Number, default: 0 },
   rescheduledHistory: [{
     originalDueDate: String,

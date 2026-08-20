@@ -74,7 +74,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
     const calculateElapsed = () => {
       let totalSec = activeTimer.elapsedSeconds;
-      if (!activeTimer.isPaused) {
+      if (activeTimer.status !== 'paused') {
         const start = new Date(activeTimer.startTime).getTime();
         const now = Date.now();
         const diff = Math.max(0, Math.floor((now - start) / 1000));
@@ -172,7 +172,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 {activeTimer.taskTitle}
               </span>
               <div className="flex items-center space-x-1 pl-1 border-l border-[#141414]">
-                {activeTimer.isPaused ? (
+                {activeTimer.status === 'paused' ? (
                   <button
                     id="nav-resume-timer-btn"
                     onClick={onResumeTimer}

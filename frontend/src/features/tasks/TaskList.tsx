@@ -22,7 +22,8 @@ interface TaskListProps {
   projects: Project[];
   categories: string[];
   activeTimer: ActiveTimer | null;
-  onCompleteTask: (id: string) => Promise<void>;
+  onCompleteTask: (task: Task) => Promise<void>;
+  onUncompleteTask: (id: string) => Promise<void>;
   onStartTimer: (id: string) => Promise<void>;
   onStopTimer: () => void;
   onOpenTaskModal: (task?: Task) => void;
@@ -36,6 +37,7 @@ export const TaskList: React.FC<TaskListProps> = ({
   categories,
   activeTimer,
   onCompleteTask,
+  onUncompleteTask,
   onStartTimer,
   onStopTimer,
   onOpenTaskModal,
@@ -174,7 +176,7 @@ export const TaskList: React.FC<TaskListProps> = ({
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-start space-x-3 flex-1 min-w-0">
                     <button
-                      onClick={() => onCompleteTask(task._id)}
+                      onClick={() => isCompleted ? onUncompleteTask(task._id) : onCompleteTask(task)}
                       className="mt-0.5 opacity-60 group-hover:opacity-100 cursor-pointer shrink-0"
                     >
                       {isCompleted ? (
