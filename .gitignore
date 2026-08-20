@@ -6,4 +6,4 @@ build/
 *.log
 coverage/
 .next/
-docs/
+

@@ -15,7 +15,8 @@ import {
 } from '../types/index';
 
 async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(url, {
+  const fullUrl = url.startsWith("http") ? url : `http://localhost:5000${url}`;
+  const res = await fetch(fullUrl, {
     ...options,
     headers: {
       'Content-Type': 'application/json',
@@ -237,3 +238,4 @@ export const apiService = {
       }
     })
 };
+
