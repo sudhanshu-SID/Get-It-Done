@@ -19,10 +19,11 @@ export default defineConfig(() => {
           theme_color: '#141414',
           background_color: '#E4E3E0',
           display: 'standalone',
+          start_url: '/',
           icons: [
             {
               src: 'app-icon.jpg',
-              sizes: '512x512',
+              sizes: '192x192 512x512',
               type: 'image/jpeg',
               purpose: 'any maskable'
             }
