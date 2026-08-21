@@ -275,6 +275,32 @@ router.get('/daily/today', async (req, res) => {
       settings = { userName: 'Commander', timezone: 'UTC' };
     }
 
+    // Get yesterday's record
+    const yesterday = new Date(startOfToday);
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayStr = yesterday.toISOString().split('T')[0];
+    const yesterdayRecord = await DailyRecord.findOne({ date: yesterdayStr });
+    let yesterdayData = null;
+    
+    if (yesterdayRecord) {
+      const completedYesterdayIds = yesterdayRecord.completedTaskIds || [];
+      const missedYesterdayIds = yesterdayRecord.missedTaskIds || [];
+      const completedTasksYesterday = tasks.filter(t => completedYesterdayIds.includes(t._id.toString()));
+      const missedTasksYesterday = tasks.filter(t => missedYesterdayIds.includes(t._id.toString()));
+
+      yesterdayData = {
+        date: yesterdayRecord.date,
+        formattedDate: yesterday.toDateString(),
+        completedCount: completedYesterdayIds.length,
+        totalCount: completedYesterdayIds.length + missedYesterdayIds.length,
+        totalWorkMinutes: Math.floor((yesterdayRecord.totalWorkSeconds || 0) / 60),
+        completedTasks: completedTasksYesterday.map(t => t.title),
+        missedTasks: missedTasksYesterday.map(t => t.title),
+        status: yesterdayRecord.status,
+        dailyNote: yesterdayRecord.dailyNote
+      };
+    }
+
     res.json({
       success: true,
       data: {
@@ -295,7 +321,7 @@ router.get('/daily/today', async (req, res) => {
         requiredTasks: required,
         optionalTasks: optional,
         activeTimer: await ActiveTimer.findOne(),
-        yesterday: null,
+        yesterday: yesterdayData,
         projectContexts: projects.map(p => ({ project: p, pendingTasks: tasks.filter(t => t.projectId === p._id.toString() && t.status !== 'completed') })),
         recentStrikes: [],
         noProgressToday: false
@@ -360,8 +386,21 @@ router.get('/analytics', async (req, res) => {
       }
     }
     
-    const timeByCategoryArray = Object.keys(timeByCategory).map(name => ({ name, minutes: timeByCategory[name] }));
-    const timeByProjectArray = Object.keys(timeByProject).map(id => ({ id, minutes: timeByProject[id] }));
+    const timeByCategoryArray = Object.keys(timeByCategory).map(category => ({ 
+      category, 
+      minutes: timeByCategory[category],
+      percentage: totalMinutes > 0 ? Math.round((timeByCategory[category] / totalMinutes) * 100) : 0
+    }));
+    
+    const timeByProjectArray = Object.keys(timeByProject).map(projectId => {
+      const taskWithProject = tasks.find(t => t.projectId === projectId);
+      return { 
+        projectId, 
+        projectName: taskWithProject ? taskWithProject.projectName : 'Unknown',
+        minutes: timeByProject[projectId],
+        percentage: totalMinutes > 0 ? Math.round((timeByProject[projectId] / totalMinutes) * 100) : 0
+      };
+    });
     
     const completedTasks = tasks.filter(t => t.status === 'completed');
     const totalTasksCompleted = completedTasks.length;
@@ -379,6 +418,35 @@ router.get('/analytics', async (req, res) => {
     const requiredCompletionRate = requiredTasksTotal > 0 ? Math.round((requiredTasksCompleted / requiredTasksTotal) * 100) : 100;
     const completionRate = tasks.length > 0 ? Math.round((totalTasksCompleted / tasks.length) * 100) : 100;
     
+    // Generate last 7 days daily work history
+    const last7Days = [];
+    const todayForChart = new Date();
+    todayForChart.setHours(0, 0, 0, 0);
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(todayForChart);
+      d.setDate(d.getDate() - i);
+      const dateStr = d.toISOString().split('T')[0];
+      const dayName = d.toLocaleDateString('en-US', { weekday: 'short' });
+      
+      const record = dailyRecords.find(r => r.date === dateStr);
+      last7Days.push({
+        date: dateStr,
+        day: dayName,
+        minutes: record ? Math.floor((record.totalWorkSeconds || 0) / 60) : 0,
+        requiredCount: record?.requiredTaskIds?.length || 0,
+        completedCount: record?.completedTaskIds?.length || 0
+      });
+    }
+
+    const estimatedVsActual = completedTasks.map(t => ({
+      taskId: t._id.toString(),
+      title: t.title,
+      category: t.category || 'Uncategorized',
+      estimatedMinutes: t.estimatedMinutes || 0,
+      actualMinutes: t.actualMinutes || 0,
+      differenceMinutes: (t.actualMinutes || 0) - (t.estimatedMinutes || 0)
+    }));
+    
     res.json({ 
       success: true, 
       data: { 
@@ -390,7 +458,8 @@ router.get('/analytics', async (req, res) => {
         requiredCompletionRate, 
         timeByCategory: timeByCategoryArray, 
         timeByProject: timeByProjectArray, 
-        dailyWorkHistory: dailyRecords, 
+        dailyWorkHistory: last7Days, 
+        estimatedVsActual: estimatedVsActual,
         strikeHistory: {total:0, open:0, resolved:0, byMonth:[]} 
       }
     });

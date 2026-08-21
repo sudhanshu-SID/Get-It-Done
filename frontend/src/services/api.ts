@@ -15,7 +15,8 @@ import {
 } from '../types/index';
 
 async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
-  const fullUrl = url.startsWith("http") ? url : `http://localhost:5000${url}`;
+  const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+  const fullUrl = url.startsWith("http") ? url : `${baseUrl}${url}`;
   const res = await fetch(fullUrl, {
     ...options,
     headers: {
