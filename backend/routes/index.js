@@ -39,7 +39,17 @@ makeCrud(Project, '/projects');
 makeCrud(Goal, '/goals');
 makeCrud(Reward, '/rewards');
 makeCrud(Consequence, '/consequences');
-makeCrud(Strike, '/strikes');
+
+// Strike Routes
+const strikeController = require('../controllers/strikeController');
+router.get('/strikes', strikeController.getStrikes);
+router.get('/strikes/:id', strikeController.getStrikeById);
+router.post('/strikes', strikeController.createStrike);
+router.patch('/strikes/:id', strikeController.updateStrike);
+router.delete('/strikes/:id', strikeController.deleteStrike);
+router.post('/strikes/:id/resolve', strikeController.resolveStrike);
+router.post('/strikes/:id/dismiss', strikeController.dismissStrike);
+router.get('/strike-summary', strikeController.getStrikeSummary);
 
 router.post('/tasks/:id/complete', async (req, res) => {
   try {

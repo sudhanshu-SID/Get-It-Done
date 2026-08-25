@@ -64,6 +64,16 @@ exports.dismissStrike = async (req, res) => {
   }
 };
 
+exports.deleteStrike = async (req, res) => {
+  try {
+    const strike = await strikeService.deleteStrike(req.params.id);
+    if (!strike) return res.status(404).json({ success: false, message: 'Strike not found' });
+    res.json({ success: true, data: { message: 'Deleted successfully' } });
+  } catch (error) {
+    handleError(res, error, 'Failed to delete strike');
+  }
+};
+
 exports.getStrikeSummary = async (req, res) => {
   try {
     const summary = await strikeService.getStrikeSummary();

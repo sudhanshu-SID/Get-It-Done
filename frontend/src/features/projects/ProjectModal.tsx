@@ -186,6 +186,19 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({
 
             <div>
               <label className="block text-[11px] font-mono font-bold uppercase text-[#141414]">
+                Last Completed Action
+              </label>
+              <input
+                type="text"
+                value={lastCompleted}
+                onChange={e => setLastCompleted(e.target.value)}
+                placeholder="e.g. Project initialization"
+                className="mt-1 w-full border border-[#141414] bg-white px-2.5 py-1 text-xs font-mono text-[#141414] focus:outline-none"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-mono font-bold uppercase text-[#141414]">
                 Next Action
               </label>
               <input

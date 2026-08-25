@@ -67,6 +67,13 @@ exports.updateRecord = async (req, res) => {
 
 exports.getTodaySummary = async (req, res) => {
   try {
+    // Catch up on any missed days in the background
+    try {
+      await dailyService.evaluatePastDays(7);
+    } catch (e) {
+      console.error('Failed to evaluate past days:', e);
+    }
+
     const summary = await dailyService.getTodaySummary();
     res.json({ success: true, data: summary });
   } catch (error) {

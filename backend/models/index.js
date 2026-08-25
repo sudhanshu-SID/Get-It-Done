@@ -11,6 +11,8 @@ const AgentPermission = require('./AgentPermission');
 const User = require('./User');
 const UserSettings = require('./UserSettings');
 
+const Gamification = require('./Gamification');
+
 module.exports = {
   Task,
   TaskSession,
@@ -24,4 +26,5 @@ module.exports = {
   AgentPermission,
   User,
   UserSettings,
+  Gamification,
 };

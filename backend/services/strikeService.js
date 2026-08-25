@@ -49,7 +49,8 @@ class StrikeService {
     
     await this.checkAndTriggerConsequences(gamification?.currentStrikes || number);
     
-    return saved.populate('taskId').populate('goalId').populate('consequenceId');
+    await saved.populate(['taskId', 'goalId', 'consequenceId']);
+    return saved;
   }
 
   async updateStrike(id, data) {
@@ -109,6 +110,27 @@ class StrikeService {
       });
     }
     
+    return strike;
+  }
+
+  async deleteStrike(id) {
+    checkDB();
+    const strike = await Strike.findByIdAndDelete(id);
+    if (strike && strike.status !== 'resolved' && strike.status !== 'dismissed') {
+      const gamification = await Gamification.findOne();
+      if (gamification) {
+        gamification.currentStrikes = Math.max(0, gamification.currentStrikes - 1);
+        await gamification.save();
+      }
+      
+      await AccountabilityLog.create({
+        source: 'user',
+        action: 'strike_deleted',
+        message: `Strike #${strike.number} deleted manually`,
+        relatedTaskId: strike.taskId,
+        metadata: { strikeId: strike._id },
+      });
+    }
     return strike;
   }
 

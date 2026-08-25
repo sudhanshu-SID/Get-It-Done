@@ -229,6 +229,55 @@ class DailyService {
     return this.evaluateCommitments(record);
   }
 
+  async evaluatePastDays(daysToLookBack = 7) {
+    checkDB();
+    const today = startOfDay(new Date());
+    let strikesCreatedTotal = 0;
+    
+    for (let i = 1; i <= daysToLookBack; i++) {
+      const pastDate = subDays(today, i);
+      let record = await DailyRecord.findOne({ date: pastDate });
+      
+      if (!record) {
+        const tomorrowOfPast = new Date(pastDate);
+        tomorrowOfPast.setDate(tomorrowOfPast.getDate() + 1);
+        
+        const tasks = await Task.find({
+          scheduledDate: { $gte: pastDate, $lt: tomorrowOfPast },
+        });
+        
+        const requiredTaskIds = tasks
+          .filter(t => t.commitmentLevel === 'required')
+          .map(t => t._id);
+          
+        if (requiredTaskIds.length > 0) {
+          record = new DailyRecord({
+            date: pastDate,
+            timezone: 'UTC',
+            requiredTaskIds,
+            optionalTaskIds: [],
+            completedTaskIds: [],
+            completedOptionalTaskIds: [],
+            missedTaskIds: requiredTaskIds,
+            totalWorkSeconds: 0,
+            status: 'partial',
+          });
+          await record.save();
+        }
+      }
+      
+      if (record && !record.evaluationId) {
+        const result = await this.runDailyEvaluation(pastDate);
+        if (result && result.strikesCreated) {
+          strikesCreatedTotal += result.strikesCreated;
+        }
+      }
+    }
+    
+    return strikesCreatedTotal;
+  }
+
+
   async getTodaySummary() {
     checkDB();
     const today = startOfDay(new Date());

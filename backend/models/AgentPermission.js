@@ -31,7 +31,4 @@ const AgentPermissionSchema = new mongoose.Schema({
   },
 }, { timestamps: true });
 
-AgentPermissionSchema.index({ apiKey: 1 }, { unique: true });
-AgentPermissionSchema.index({ agentName: 1 }, { unique: true });
-
 module.exports = mongoose.model('AgentPermission', AgentPermissionSchema);

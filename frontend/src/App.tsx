@@ -609,7 +609,7 @@ export default function App() {
             setIsContextEditModalOpen(false);
             setSelectedProjectForContext(null);
           }}
-          onSave={handleUpdateProjectContext}
+          onSaveContext={handleUpdateProjectContext}
           project={selectedProjectForContext}
         />
       )}
