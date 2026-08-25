@@ -12,6 +12,7 @@ import {
   Play
 } from 'lucide-react';
 import { Project, Task, ActiveTimer } from '../../types/index';
+import { StickyBoard } from '../notes/StickyBoard';
 
 interface ProjectListProps {
   projects: Project[];
@@ -54,7 +55,10 @@ export const ProjectList: React.FC<ProjectListProps> = ({
   };
 
   return (
-    <div className="space-y-6 pb-12">
+    <div className="space-y-6 pb-12 relative">
+      {/* Sticky Notes for the selected project */}
+      {activeProject && <StickyBoard key={activeProject._id} projectId={activeProject._id} />}
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between border-b-2 border-[#141414] pb-4 gap-3">
         <div>

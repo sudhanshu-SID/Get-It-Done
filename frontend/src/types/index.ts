@@ -268,3 +268,13 @@ export interface AnalyticsSummary {
     byMonth: Array<{ month: string; count: number }>;
   };
 }
+
+export interface Note {
+  _id: string;
+  content: string;
+  color: 'yellow' | 'pink' | 'blue' | 'green';
+  position: { x: number; y: number };
+  projectId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}

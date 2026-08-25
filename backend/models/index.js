@@ -13,6 +13,8 @@ const UserSettings = require('./UserSettings');
 
 const Gamification = require('./Gamification');
 
+const Note = require('./Note');
+
 module.exports = {
   Task,
   TaskSession,
@@ -27,4 +29,5 @@ module.exports = {
   User,
   UserSettings,
   Gamification,
+  Note,
 };

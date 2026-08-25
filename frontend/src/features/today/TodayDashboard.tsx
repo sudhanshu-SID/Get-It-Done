@@ -18,10 +18,11 @@ import {
   RotateCcw,
   Sparkles,
   BookOpen,
-  FolderKanban,
-  Check
+  FolderKanban, 
+  Check 
 } from 'lucide-react';
 import { TodayDashboardData, Task, Project, ActiveTimer } from '../../types/index';
+import { StickyBoard } from '../notes/StickyBoard';
 
 interface TodayDashboardProps {
   data: TodayDashboardData;
@@ -94,6 +95,7 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
 
   return (
     <div className="space-y-6 pb-12">
+      <StickyBoard />
       {/* High Density Metric Top Header Banner */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between border-b-2 border-[#141414] pb-4 gap-4">
         <div>

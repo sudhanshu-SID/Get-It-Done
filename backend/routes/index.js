@@ -40,6 +40,13 @@ makeCrud(Goal, '/goals');
 makeCrud(Reward, '/rewards');
 makeCrud(Consequence, '/consequences');
 
+// Note Routes
+const noteController = require('../controllers/noteController');
+router.get('/notes', noteController.getNotes);
+router.post('/notes', noteController.createNote);
+router.patch('/notes/:id', noteController.updateNote);
+router.delete('/notes/:id', noteController.deleteNote);
+
 // Strike Routes
 const strikeController = require('../controllers/strikeController');
 router.get('/strikes', strikeController.getStrikes);
@@ -256,6 +263,18 @@ router.get('/daily/today', async (req, res) => {
       }
     );
 
+    // Reset actualMinutes for all incomplete tasks from previous days so today starts fresh
+    await Task.updateMany(
+      {
+        status: { $ne: 'completed' },
+        updatedAt: { $lt: startOfToday },
+        actualMinutes: { $gt: 0 }
+      },
+      {
+        $set: { actualMinutes: 0 }
+      }
+    );
+
     const tasks = await Task.find();
     const projects = await Project.find();
     
@@ -311,6 +330,11 @@ router.get('/daily/today', async (req, res) => {
       };
     }
 
+    const todaySessions = await TaskSession.find({
+      startTime: { $gte: startOfToday.toISOString() }
+    });
+    const totalTrackedMinutesToday = todaySessions.reduce((sum, s) => sum + (s.durationMinutes || 0), 0);
+
     res.json({
       success: true,
       data: {
@@ -324,7 +348,7 @@ router.get('/daily/today', async (req, res) => {
           totalOptional: optional.length, 
           completedOptional, 
           completionRate: totalRequired ? Math.round((completedRequired / totalRequired)*100) : 100, 
-          totalTrackedMinutesToday: tasks.reduce((sum, t) => sum + (t.actualMinutes||0), 0), 
+          totalTrackedMinutesToday, 
           currentStrikes: 0, 
           currentStreak
         },

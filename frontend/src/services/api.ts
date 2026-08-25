@@ -11,7 +11,8 @@ import {
   AccountabilityLog,
   UserSettings,
   TodayDashboardData,
-  AnalyticsSummary
+  AnalyticsSummary,
+  Note
 } from '../types/index';
 
 async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
@@ -213,6 +214,26 @@ export const apiService = {
     }),
   deleteStrike: (id: string) =>
     fetchJson<{ message: string }>(`/api/strikes/${id}`, {
+      method: 'DELETE'
+    }),
+
+  // Notes (Sticky)
+  getNotes: (projectId?: string) => {
+    const qs = projectId ? `?projectId=${projectId}` : '';
+    return fetchJson<Note[]>(`/api/notes${qs}`);
+  },
+  createNote: (note: Partial<Note>) =>
+    fetchJson<Note>('/api/notes', {
+      method: 'POST',
+      body: JSON.stringify(note)
+    }),
+  updateNote: (id: string, updates: Partial<Note>) =>
+    fetchJson<Note>(`/api/notes/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(updates)
+    }),
+  deleteNote: (id: string) =>
+    fetchJson<{ message: string }>(`/api/notes/${id}`, {
       method: 'DELETE'
     }),
 
