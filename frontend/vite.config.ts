@@ -23,9 +23,21 @@ export default defineConfig(() => {
           icons: [
             {
               src: 'app-icon.jpg',
+              sizes: '192x192',
+              type: 'image/jpeg',
+              purpose: 'any'
+            },
+            {
+              src: 'app-icon.jpg',
+              sizes: '512x512',
+              type: 'image/jpeg',
+              purpose: 'any'
+            },
+            {
+              src: 'app-icon.jpg',
               sizes: '192x192 512x512',
               type: 'image/jpeg',
-              purpose: 'any maskable'
+              purpose: 'maskable'
             }
           ]
         }
