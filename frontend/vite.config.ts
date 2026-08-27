@@ -15,21 +15,33 @@ export default defineConfig(() => {
         manifest: {
           name: 'Get It Done',
           short_name: 'Get It Done',
-          description: 'A minimalist task and habit tracker',
+          description: 'Rewire your work ethic. A high-density accountability engine designed to enforce consistency, build momentum, and help you actually get it done.',
           theme_color: '#141414',
           background_color: '#E4E3E0',
           display: 'standalone',
           start_url: '/',
           icons: [
             {
-              src: 'get-it-done_icon.png',
-              sizes: '1254x1254',
+              src: 'icon-192.png',
+              sizes: '192x192',
               type: 'image/png',
               purpose: 'any'
             },
             {
-              src: 'get-it-done_icon.png',
-              sizes: '1254x1254',
+              src: 'icon-192.png',
+              sizes: '192x192',
+              type: 'image/png',
+              purpose: 'maskable'
+            },
+            {
+              src: 'icon-512.png',
+              sizes: '512x512',
+              type: 'image/png',
+              purpose: 'any'
+            },
+            {
+              src: 'icon-512.png',
+              sizes: '512x512',
               type: 'image/png',
               purpose: 'maskable'
             }

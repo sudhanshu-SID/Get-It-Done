@@ -117,12 +117,12 @@ export const Navbar: React.FC<NavbarProps> = ({
             onClick={() => onSelectTab('today')}
             className="flex items-center space-x-3 text-left focus:outline-none group cursor-pointer"
           >
-            <div className="w-8 h-8 bg-[#141414] flex items-center justify-center text-white font-mono font-bold text-xs shadow-xs">
-              ⚡
+            <div className="w-8 h-8 bg-[#141414] flex items-center justify-center text-white font-mono font-bold text-xs shadow-xs overflow-hidden">
+              <img src="/get-it-done_icon.png" alt="Icon" className="w-full h-full object-cover" />
             </div>
             <div className="flex flex-col">
               <h1 className="text-base font-black tracking-tighter uppercase text-[#141414]">
-                Accountability OS <span className="opacity-40 font-normal text-xs font-mono">v4.0.2</span>
+                Get It Done <span className="opacity-40 font-normal text-xs font-mono">v4.0.2</span>
               </h1>
               <span className="text-[9px] font-mono font-bold uppercase tracking-widest text-[#141414]/60">
                 HIGH DENSITY CONTROL
@@ -203,7 +203,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             </div>
           )}
 
-          {/* Jarvis Assistant Hook */}
+          {/* Jarvis Assistant Hook - Commented out for now
           <button
             id="open-jarvis-modal-btn"
             onClick={onOpenAgentInspector}
@@ -213,6 +213,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             <span className="hidden sm:inline">Jarvis Agent</span>
             <span className="h-1.5 w-1.5 rounded-full bg-green-600"></span>
           </button>
+          */}
         </div>
       </div>
 
