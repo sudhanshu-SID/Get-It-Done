@@ -10,6 +10,7 @@ const ActiveTimer = require('../models/ActiveTimer');
 const TaskSession = require('../models/TaskSession');
 const UserSettings = require('../models/UserSettings');
 const DailyRecord = require('../models/DailyRecord');
+const dailyService = require('../services/dailyService');
 
 const makeCrud = (model, path) => {
   router.get(path, async (req, res) => {
@@ -67,13 +68,16 @@ router.post('/tasks/:id/complete', async (req, res) => {
     const task = await Task.findByIdAndUpdate(req.params.id, updateData, {new: true});
     
     if (task) {
-      const goals = await Goal.find({ status: 'active', type: 'task_count', category: task.category });
+      const goals = await Goal.find({ status: 'active', category: task.category });
       for (const goal of goals) {
-        if (task.category === 'DSA' && task.questionsSolved) {
+        if (goal.type === 'metric_count' && task.questionsSolved) {
           goal.currentValue += task.questionsSolved;
-        } else {
+        } else if (goal.type === 'task_count') {
           goal.currentValue += 1;
+        } else {
+          continue;
         }
+        
         if (goal.currentValue >= goal.targetValue) {
           goal.status = 'achieved';
           await Reward.updateMany(
@@ -90,14 +94,13 @@ router.post('/tasks/:id/complete', async (req, res) => {
         if (!dailyRecord.completedTaskIds) dailyRecord.completedTaskIds = [];
         if (!dailyRecord.completedTaskIds.includes(task._id.toString())) {
           dailyRecord.completedTaskIds.push(task._id.toString());
-          dailyRecord.status = 'completed';
           await dailyRecord.save();
         }
       } else {
         await DailyRecord.create({
           date: todayStr,
           completedTaskIds: [task._id.toString()],
-          status: 'completed'
+          status: 'partial'
         });
       }
     }
@@ -231,6 +234,12 @@ router.post('/timer/stop', async (req, res) => {
     const task = await Task.findByIdAndUpdate(timer.taskId, { $inc: { actualMinutes: durationMins } }, {new: true});
     if(timer.projectId) await Project.findByIdAndUpdate(timer.projectId, { $inc: { totalTimeMinutes: durationMins } });
     
+    const todayStr = new Date().toISOString().split('T')[0];
+    await DailyRecord.findOneAndUpdate(
+      { date: todayStr },
+      { $inc: { totalWorkSeconds: totalSeconds } }
+    );
+    
     await ActiveTimer.deleteMany();
     res.json({ success: true, data: { session, task } });
   } catch(e) { res.status(500).json({ success: false, message: e.message }); }
@@ -246,12 +255,14 @@ router.get('/daily/today', async (req, res) => {
     const startOfToday = new Date();
     startOfToday.setHours(0, 0, 0, 0);
     
-    // Reset completed recurring tasks if the day has changed
+    // Evaluate past days before rolling over tasks to ensure strikes are issued for yesterday
+    await dailyService.evaluatePastDays(7);
+
+    // Roll over all recurring tasks from previous days (completed or missed) to today
     await Task.updateMany(
       { 
         recurrence: { $ne: 'none' },
-        status: 'completed',
-        updatedAt: { $lt: startOfToday }
+        scheduledDate: { $lt: todayStr }
       },
       {
         $set: {

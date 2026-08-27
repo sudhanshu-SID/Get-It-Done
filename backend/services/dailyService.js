@@ -26,9 +26,10 @@ class DailyService {
     const today = startOfDay(new Date());
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
+    const todayStr = format(today, 'yyyy-MM-dd');
     
     const tasks = await Task.find({
-      scheduledDate: { $gte: today, $lt: tomorrow },
+      scheduledDate: todayStr,
       status: { $ne: 'completed' },
     });
     
@@ -105,12 +106,10 @@ class DailyService {
 
   async evaluateCommitments(dailyRecord) {
     checkDB();
-    const evaluationId = `${format(dailyRecord.date, 'yyyy-MM-dd')}-${Date.now()}`;
-    
-    const existingEvaluation = await DailyRecord.findOne({ evaluationId });
-    if (existingEvaluation) {
+    if (dailyRecord.evaluationId) {
       return { strikesCreated: 0, message: 'Already evaluated' };
     }
+    const evaluationId = `${format(dailyRecord.date, 'yyyy-MM-dd')}-${Date.now()}`;
     
     const missedRequired = dailyRecord.missedTaskIds.length;
     const user = await User.findOne();
@@ -119,40 +118,61 @@ class DailyService {
     
     let strikesCreated = 0;
     
-    if (strikesEnabled && missedRequired >= strikeThreshold) {
-      const lastStrike = await Strike.findOne().sort({ number: -1 });
-      const nextNumber = (lastStrike?.number || 0) + 1;
+    if (strikesEnabled) {
+      const totalPlanned = dailyRecord.requiredTaskIds.length + dailyRecord.missedTaskIds.length + dailyRecord.completedTaskIds.length + (dailyRecord.optionalTaskIds?.length || 0) + (dailyRecord.completedOptionalTaskIds?.length || 0);
       
-      for (const taskId of dailyRecord.missedTaskIds) {
-        const task = await Task.findById(taskId);
-        if (!task) continue;
-        
+      const lastStrike = await Strike.findOne().sort({ number: -1 });
+      let nextNumber = (lastStrike?.number || 0) + 1;
+      
+      if (totalPlanned === 0) {
         const strike = new Strike({
-          number: nextNumber + strikesCreated,
-          reason: `Missed required commitment: ${task.title}`,
-          taskId,
+          number: nextNumber,
+          reason: 'No tasks planned or logged for the day',
           date: dailyRecord.date,
-          severity: missedRequired > 2 ? 'major' : 'minor',
+          severity: 'high',
           status: 'open',
         });
         
         await strike.save();
         strikesCreated++;
         
-        await this.checkAndTriggerConsequences(strikesCreated);
-        
         await AccountabilityLog.create({
           source: 'system',
           action: 'strike_created',
           message: `Strike #${strike.number} created: ${strike.reason}`,
-          relatedTaskId: taskId,
         });
+      } else if (missedRequired >= strikeThreshold) {
+        for (const taskId of dailyRecord.missedTaskIds) {
+          const task = await Task.findById(taskId);
+          if (!task) continue;
+          
+          const strike = new Strike({
+            number: nextNumber + strikesCreated,
+            reason: `Missed required commitment: ${task.title}`,
+            taskId,
+            date: dailyRecord.date,
+            severity: missedRequired > 2 ? 'high' : 'low',
+            status: 'open',
+          });
+          
+          await strike.save();
+          strikesCreated++;
+          
+          await AccountabilityLog.create({
+            source: 'system',
+            action: 'strike_created',
+            message: `Strike #${strike.number} created: ${strike.reason}`,
+            relatedTaskId: taskId,
+          });
+        }
       }
       
       if (strikesCreated > 0) {
         const gamification = await this.getOrCreateGamification();
         gamification.currentStrikes += strikesCreated;
         await gamification.save();
+        
+        await this.checkAndTriggerConsequences(gamification.currentStrikes);
       }
     }
     
@@ -215,14 +235,28 @@ class DailyService {
       return { message: 'Day already completed', strikesCreated: 0 };
     }
     
-    const incompleteRequired = record.requiredTaskIds.filter(
+    const dateStr = record.date;
+    const tasks = await Task.find({ scheduledDate: dateStr });
+    
+    const requiredTaskIds = tasks.filter(t => t.commitmentLevel === 'required').map(t => t._id.toString());
+    const optionalTaskIds = tasks.filter(t => t.commitmentLevel === 'optional').map(t => t._id.toString());
+    
+    record.optionalTaskIds = optionalTaskIds;
+    
+    const incompleteRequired = requiredTaskIds.filter(
       id => !record.completedTaskIds.some(c => c.toString() === id.toString())
     );
     
     record.missedTaskIds = incompleteRequired;
-    record.requiredTaskIds = record.requiredTaskIds.filter(
+    record.requiredTaskIds = requiredTaskIds.filter(
       id => record.completedTaskIds.some(c => c.toString() === id.toString())
     );
+    
+    if (incompleteRequired.length === 0 && requiredTaskIds.length > 0) {
+      record.status = 'completed';
+    } else if (requiredTaskIds.length > 0) {
+      record.status = 'partial';
+    }
     
     await record.save();
     
@@ -239,31 +273,32 @@ class DailyService {
       let record = await DailyRecord.findOne({ date: pastDate });
       
       if (!record) {
-        const tomorrowOfPast = new Date(pastDate);
-        tomorrowOfPast.setDate(tomorrowOfPast.getDate() + 1);
+        const pastDateStr = format(pastDate, 'yyyy-MM-dd');
         
         const tasks = await Task.find({
-          scheduledDate: { $gte: pastDate, $lt: tomorrowOfPast },
+          scheduledDate: pastDateStr,
         });
         
         const requiredTaskIds = tasks
           .filter(t => t.commitmentLevel === 'required')
           .map(t => t._id);
           
-        if (requiredTaskIds.length > 0) {
-          record = new DailyRecord({
-            date: pastDate,
-            timezone: 'UTC',
-            requiredTaskIds,
-            optionalTaskIds: [],
-            completedTaskIds: [],
-            completedOptionalTaskIds: [],
-            missedTaskIds: requiredTaskIds,
-            totalWorkSeconds: 0,
-            status: 'partial',
-          });
-          await record.save();
-        }
+        const optionalTaskIds = tasks
+          .filter(t => t.commitmentLevel === 'optional')
+          .map(t => t._id);
+          
+        record = new DailyRecord({
+          date: pastDate,
+          timezone: 'UTC',
+          requiredTaskIds,
+          optionalTaskIds,
+          completedTaskIds: [],
+          completedOptionalTaskIds: [],
+          missedTaskIds: requiredTaskIds,
+          totalWorkSeconds: 0,
+          status: (requiredTaskIds.length === 0 && optionalTaskIds.length === 0) ? 'no_progress' : 'partial',
+        });
+        await record.save();
       }
       
       if (record && !record.evaluationId) {
@@ -297,16 +332,14 @@ class DailyService {
       };
     }
     
-    const requiredTotal = record.requiredTaskIds.length + record.completedTaskIds.filter(id => 
-      record.requiredTaskIds.some(r => r.toString() === id.toString())
-    ).length;
+    const todayStr = format(today, 'yyyy-MM-dd');
+    const tasks = await Task.find({ scheduledDate: todayStr });
     
-    const requiredCompleted = record.completedTaskIds.filter(id => 
-      record.requiredTaskIds.some(r => r.toString() === id.toString())
-    ).length;
+    const requiredTotal = tasks.filter(t => t.commitmentLevel === 'required').length;
+    const requiredCompleted = tasks.filter(t => t.commitmentLevel === 'required' && t.status === 'completed').length;
     
-    const optionalTotal = record.optionalTaskIds.length;
-    const optionalCompleted = record.completedOptionalTaskIds.length;
+    const optionalTotal = tasks.filter(t => t.commitmentLevel === 'optional').length;
+    const optionalCompleted = tasks.filter(t => t.commitmentLevel === 'optional' && t.status === 'completed').length;
     
     return {
       date: today,

@@ -8,7 +8,9 @@ const DailyRecordSchema = new mongoose.Schema({
   missedTaskIds: [String],
   totalWorkSeconds: { type: Number, default: 0 },
   status: { type: String, enum: ['completed', 'partial', 'no_progress', 'in_progress'], default: 'no_progress' },
-  dailyNote: String
+  dailyNote: String,
+  evaluationId: String,
+  evaluationRunAt: Date
 }, { timestamps: true });
 
 module.exports = mongoose.model('DailyRecord', DailyRecordSchema);
