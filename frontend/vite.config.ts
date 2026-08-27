@@ -22,21 +22,15 @@ export default defineConfig(() => {
           start_url: '/',
           icons: [
             {
-              src: 'app-icon.jpg',
-              sizes: '192x192',
-              type: 'image/jpeg',
+              src: 'get-it-done_icon.png',
+              sizes: '1254x1254',
+              type: 'image/png',
               purpose: 'any'
             },
             {
-              src: 'app-icon.jpg',
-              sizes: '512x512',
-              type: 'image/jpeg',
-              purpose: 'any'
-            },
-            {
-              src: 'app-icon.jpg',
-              sizes: '192x192 512x512',
-              type: 'image/jpeg',
+              src: 'get-it-done_icon.png',
+              sizes: '1254x1254',
+              type: 'image/png',
               purpose: 'maskable'
             }
           ]
