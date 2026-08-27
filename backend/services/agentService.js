@@ -206,7 +206,7 @@ class AgentService {
       }
     }
     
-    const task = await Task.findByIdAndUpdate(taskId, updateData, { new: true, runValidators: true });
+    const task = await Task.findByIdAndUpdate(taskId, updateData, { returnDocument: 'after', runValidators: true });
     
     if (task) {
       await AccountabilityLog.create({
@@ -231,7 +231,7 @@ class AgentService {
     const task = await Task.findByIdAndUpdate(
       taskId,
       { status: 'completed', completedAt: new Date() },
-      { new: true }
+      { returnDocument: 'after' }
     );
     
     if (task) {

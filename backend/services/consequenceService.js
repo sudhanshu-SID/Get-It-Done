@@ -28,7 +28,7 @@ class ConsequenceService {
 
   async updateConsequence(id, data) {
     checkDB();
-    return Consequence.findByIdAndUpdate(id, data, { new: true, runValidators: true });
+    return Consequence.findByIdAndUpdate(id, data, { returnDocument: 'after', runValidators: true });
   }
 
   async deleteConsequence(id) {
@@ -41,7 +41,7 @@ class ConsequenceService {
     const consequence = await Consequence.findByIdAndUpdate(
       id,
       { status: 'resolved', resolvedAt: new Date() },
-      { new: true }
+      { returnDocument: 'after' }
     );
     
     if (consequence) {
@@ -74,7 +74,7 @@ class ConsequenceService {
     const consequence = await Consequence.findByIdAndUpdate(
       id,
       { status: 'active', triggeredAt: new Date() },
-      { new: true }
+      { returnDocument: 'after' }
     );
     
     if (consequence) {

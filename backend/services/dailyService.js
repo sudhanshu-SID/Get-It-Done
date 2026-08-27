@@ -101,7 +101,7 @@ class DailyService {
   async updateRecord(date, data) {
     checkDB();
     const day = startOfDay(new Date(date));
-    return DailyRecord.findOneAndUpdate({ date: day }, data, { new: true, runValidators: true });
+    return DailyRecord.findOneAndUpdate({ date: day }, data, { returnDocument: 'after', runValidators: true });
   }
 
   async evaluateCommitments(dailyRecord) {

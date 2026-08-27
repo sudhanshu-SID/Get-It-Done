@@ -28,7 +28,7 @@ class RewardService {
 
   async updateReward(id, data) {
     checkDB();
-    return Reward.findByIdAndUpdate(id, data, { new: true, runValidators: true }).populate('linkedGoalId');
+    return Reward.findByIdAndUpdate(id, data, { returnDocument: 'after', runValidators: true }).populate('linkedGoalId');
   }
 
   async deleteReward(id) {
@@ -41,7 +41,7 @@ class RewardService {
     const reward = await Reward.findByIdAndUpdate(
       id,
       { status: 'unlocked', unlockedAt: new Date() },
-      { new: true }
+      { returnDocument: 'after' }
     ).populate('linkedGoalId');
     
     if (reward) {
@@ -61,7 +61,7 @@ class RewardService {
     const reward = await Reward.findByIdAndUpdate(
       id,
       { status: 'redeemed', redeemedAt: new Date() },
-      { new: true }
+      { returnDocument: 'after' }
     ).populate('linkedGoalId');
     
     if (reward) {

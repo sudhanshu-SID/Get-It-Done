@@ -32,7 +32,7 @@ exports.createNote = async (req, res) => {
 
 exports.updateNote = async (req, res) => {
   try {
-    const note = await Note.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    const note = await Note.findByIdAndUpdate(req.params.id, req.body, { returnDocument: 'after' });
     if (!note) return res.status(404).json({ success: false, message: 'Note not found' });
     res.json({ success: true, data: note });
   } catch (error) {

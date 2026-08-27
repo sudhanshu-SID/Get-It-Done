@@ -26,7 +26,7 @@ const makeCrud = (model, path) => {
     catch(e) { res.status(500).json({ success: false, message: e.message }); }
   });
   router.patch(`${path}/:id`, async (req, res) => {
-    try { res.json({ success: true, data: await model.findByIdAndUpdate(req.params.id, req.body, {new: true}) }); }
+    try { res.json({ success: true, data: await model.findByIdAndUpdate(req.params.id, req.body, { returnDocument: 'after' }) }); }
     catch(e) { res.status(500).json({ success: false, message: e.message }); }
   });
   router.delete(`${path}/:id`, async (req, res) => {
@@ -65,7 +65,7 @@ router.post('/tasks/:id/complete', async (req, res) => {
     if (req.body && req.body.questionsSolved) {
       updateData.questionsSolved = req.body.questionsSolved;
     }
-    const task = await Task.findByIdAndUpdate(req.params.id, updateData, {new: true});
+    const task = await Task.findByIdAndUpdate(req.params.id, updateData, { returnDocument: 'after' });
     
     if (task) {
       const goals = await Goal.find({ status: 'active', category: task.category });
@@ -177,11 +177,11 @@ router.get('/projects/:projectId/tasks', async (req, res) => {
   catch(e) { res.status(500).json({ success: false, message: e.message }); }
 });
 router.patch('/projects/:id/context', async (req, res) => {
-  try { res.json({ success: true, data: await Project.findByIdAndUpdate(req.params.id, req.body, {new: true}) }); }
+  try { res.json({ success: true, data: await Project.findByIdAndUpdate(req.params.id, req.body, { returnDocument: 'after' }) }); }
   catch(e) { res.status(500).json({ success: false, message: e.message }); }
 });
 router.post('/strikes/:id/resolve', async (req, res) => {
-  try { res.json({ success: true, data: await Strike.findByIdAndUpdate(req.params.id, {status: 'resolved', notes: req.body.notes}, {new: true}) }); }
+  try { res.json({ success: true, data: await Strike.findByIdAndUpdate(req.params.id, {status: 'resolved', notes: req.body.notes}, { returnDocument: 'after' }) }); }
   catch(e) { res.status(500).json({ success: false, message: e.message }); }
 });
 
@@ -231,7 +231,7 @@ router.post('/timer/stop', async (req, res) => {
     const durationMins = Math.floor(totalSeconds / 60) || 1; 
 
     const session = await TaskSession.create({ taskId: timer.taskId, taskTitle: timer.taskTitle, startTime: timer.createdAt, endTime: new Date().toISOString(), durationMinutes: durationMins });
-    const task = await Task.findByIdAndUpdate(timer.taskId, { $inc: { actualMinutes: durationMins } }, {new: true});
+    const task = await Task.findByIdAndUpdate(timer.taskId, { $inc: { actualMinutes: durationMins } }, { returnDocument: 'after' });
     if(timer.projectId) await Project.findByIdAndUpdate(timer.projectId, { $inc: { totalTimeMinutes: durationMins } });
     
     const todayStr = new Date().toISOString().split('T')[0];

@@ -55,7 +55,7 @@ class StrikeService {
 
   async updateStrike(id, data) {
     checkDB();
-    return Strike.findByIdAndUpdate(id, data, { new: true, runValidators: true })
+    return Strike.findByIdAndUpdate(id, data, { returnDocument: 'after', runValidators: true })
       .populate('taskId').populate('goalId').populate('consequenceId');
   }
 
@@ -64,7 +64,7 @@ class StrikeService {
     const strike = await Strike.findByIdAndUpdate(
       id,
       { status: 'resolved' },
-      { new: true }
+      { returnDocument: 'after' }
     ).populate('taskId').populate('goalId').populate('consequenceId');
     
     if (strike) {
@@ -91,7 +91,7 @@ class StrikeService {
     const strike = await Strike.findByIdAndUpdate(
       id,
       { status: 'dismissed' },
-      { new: true }
+      { returnDocument: 'after' }
     ).populate('taskId').populate('goalId').populate('consequenceId');
     
     if (strike) {

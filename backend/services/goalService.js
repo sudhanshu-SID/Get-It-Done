@@ -30,7 +30,7 @@ class GoalService {
 
   async updateGoal(id, data) {
     checkDB();
-    const goal = await Goal.findByIdAndUpdate(id, data, { new: true, runValidators: true });
+    const goal = await Goal.findByIdAndUpdate(id, data, { returnDocument: 'after', runValidators: true });
     
     if (goal && goal.currentValue >= goal.targetValue && goal.status === 'active') {
       goal.status = 'completed';

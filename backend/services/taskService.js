@@ -42,7 +42,7 @@ class TaskService {
 
   async updateTask(id, data) {
     checkDB();
-    const task = await Task.findByIdAndUpdate(id, data, { new: true, runValidators: true }).populate('projectId');
+    const task = await Task.findByIdAndUpdate(id, data, { returnDocument: 'after', runValidators: true }).populate('projectId');
     
     if (data.status === 'completed' && task.completedAt === null) {
       task.completedAt = new Date();
@@ -70,7 +70,7 @@ class TaskService {
     const task = await Task.findByIdAndUpdate(
       id,
       { status: 'completed', completedAt: new Date() },
-      { new: true }
+      { returnDocument: 'after' }
     ).populate('projectId');
     
     if (task) {
@@ -89,7 +89,7 @@ class TaskService {
         $addToSet: { completedTaskIds: task._id },
         $pull: { requiredTaskIds: task._id, missedTaskIds: task._id },
       },
-      { new: true, upsert: true }
+      { returnDocument: 'after', upsert: true }
     );
     
     await this.updateDailyRecordStatus(dailyRecord);

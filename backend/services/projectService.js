@@ -28,7 +28,7 @@ class ProjectService {
 
   async updateProject(id, data) {
     checkDB();
-    return Project.findByIdAndUpdate(id, data, { new: true, runValidators: true });
+    return Project.findByIdAndUpdate(id, data, { returnDocument: 'after', runValidators: true });
   }
 
   async deleteProject(id) {
@@ -53,7 +53,7 @@ class ProjectService {
       }
     }
     
-    return Project.findByIdAndUpdate(id, updateData, { new: true, runValidators: true });
+    return Project.findByIdAndUpdate(id, updateData, { returnDocument: 'after', runValidators: true });
   }
 
   async getActiveProjects() {
