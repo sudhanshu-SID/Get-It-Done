@@ -99,7 +99,7 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ analytic
           </div>
         </div>
 
-        {/* Q3: DSA Average Speed */}
+        {/* Q3: DSA Average Speed
         <div className="border-2 border-[#141414] bg-white p-4 space-y-2 text-[#141414]">
           <div className="flex items-center justify-between text-xs font-mono font-bold uppercase opacity-60">
             <span>DSA Velocity</span>
@@ -113,6 +113,7 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ analytic
             {analytics.dsaAnalytics?.problemsCompleted || 11} problems solved this period.
           </div>
         </div>
+        */}
 
         {/* Q4: Strikes & Accountability */}
         <div className="border-2 border-[#141414] bg-white p-4 space-y-2 text-[#141414]">

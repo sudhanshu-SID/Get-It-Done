@@ -41,6 +41,25 @@ export const GoalList: React.FC<GoalListProps> = ({
           {goals.map(goal => {
             const percentage = Math.min(100, Math.round((goal.currentValue / (goal.targetValue || 1)) * 100));
             const isAchieved = goal.status === 'achieved' || percentage >= 100;
+            
+            let daysRemainingText = null;
+            if (goal.endDate && !isAchieved) {
+              const end = new Date(goal.endDate);
+              const now = new Date();
+              // Reset time to properly calculate full days
+              end.setHours(0,0,0,0);
+              now.setHours(0,0,0,0);
+              const diffTime = end.getTime() - now.getTime();
+              const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+              
+              if (diffDays < 0) {
+                daysRemainingText = <span className="text-red-600 font-bold">EXPIRED</span>;
+              } else if (diffDays === 0) {
+                daysRemainingText = <span className="text-red-600 font-bold animate-pulse">EXPIRES TODAY</span>;
+              } else {
+                daysRemainingText = <span className="text-red-600 font-bold">{diffDays} DAYS LEFT</span>;
+              }
+            }
 
             return (
               <div
@@ -105,10 +124,12 @@ export const GoalList: React.FC<GoalListProps> = ({
                     />
                   </div>
 
-                  <div className="flex items-center justify-between text-[10px] font-mono opacity-70 pt-1">
-                    <span>DEADLINE: {goal.endDate}</span>
-                    {isAchieved && (
+                  <div className="flex items-center justify-between text-[10px] font-mono pt-1">
+                    <span className="opacity-70">DEADLINE: {goal.endDate}</span>
+                    {isAchieved ? (
                       <span className="text-green-800 font-bold uppercase">ACHIEVED ✓</span>
+                    ) : (
+                      daysRemainingText
                     )}
                   </div>
                 </div>
