@@ -235,7 +235,7 @@ class DailyService {
       return { message: 'Day already completed', strikesCreated: 0 };
     }
     
-    const dateStr = record.date;
+    const dateStr = format(record.date, 'yyyy-MM-dd');
     const tasks = await Task.find({ scheduledDate: dateStr });
     
     const requiredTaskIds = tasks.filter(t => t.commitmentLevel === 'required').map(t => t._id.toString());

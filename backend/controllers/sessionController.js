@@ -40,7 +40,13 @@ exports.resumeSession = async (req, res) => {
 
 exports.stopSession = async (req, res) => {
   try {
-    const session = await sessionService.stopSession(req.params.id);
+    let sessionId = req.params.id;
+    if (sessionId === 'active') {
+      const activeSession = await sessionService.getActiveSession();
+      if (!activeSession) return res.status(404).json({ success: false, message: 'No active session found' });
+      sessionId = activeSession._id;
+    }
+    const session = await sessionService.stopSession(sessionId);
     res.json({ success: true, data: session });
   } catch (error) {
     handleError(res, error, 'Failed to stop timer');

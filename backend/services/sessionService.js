@@ -36,21 +36,31 @@ class TaskSessionService {
 
   async pauseSession(sessionId) {
     checkDB();
-    const session = await TaskSession.findById(sessionId);
-    if (!session || !session.isActive) throw new Error('No active session found');
-    
     const now = new Date();
+    
+    // Atomically find the active session and mark it inactive to prevent race conditions
+    const session = await TaskSession.findOneAndUpdate(
+      { _id: sessionId, isActive: true },
+      { isActive: false, endTime: now },
+      { new: false }
+    );
+    
+    if (!session) {
+      throw new Error('No active session found or already paused');
+    }
+    
     const duration = Math.floor((now - session.startTime) / 1000);
     
-    session.endTime = now;
-    session.durationSeconds = duration;
-    session.isActive = false;
+    const updatedSession = await TaskSession.findByIdAndUpdate(
+      sessionId,
+      { $set: { durationSeconds: duration } }, 
+      { new: true }
+    );
     
-    await session.save();
     await this.updateTaskTime(session.taskId, duration);
     await this.updateDailyRecordTime(duration);
     
-    return session;
+    return updatedSession;
   }
 
   async resumeSession(sessionId) {
@@ -78,20 +88,28 @@ class TaskSessionService {
 
   async stopSession(sessionId) {
     checkDB();
-    const session = await TaskSession.findById(sessionId);
-    if (!session) throw new Error('Session not found');
-    
     const now = new Date();
-    let additionalDuration = 0;
     
-    if (session.isActive) {
-      additionalDuration = Math.floor((now - session.startTime) / 1000);
-      session.endTime = now;
-      session.durationSeconds += additionalDuration;
-      session.isActive = false;
+    // Atomically find the active session and mark it inactive to prevent race conditions
+    const session = await TaskSession.findOneAndUpdate(
+      { _id: sessionId, isActive: true },
+      { isActive: false, endTime: now },
+      { new: false } // return the document BEFORE the update
+    );
+    
+    if (!session) {
+      // If no active session was found atomically, it might have already been stopped
+      return await TaskSession.findById(sessionId);
     }
     
-    await session.save();
+    const additionalDuration = Math.floor((now - session.startTime) / 1000);
+    
+    // Update the session's duration
+    const updatedSession = await TaskSession.findByIdAndUpdate(
+      sessionId,
+      { $inc: { durationSeconds: additionalDuration } },
+      { new: true }
+    );
     
     if (additionalDuration > 0) {
       await this.updateTaskTime(session.taskId, additionalDuration);
@@ -104,7 +122,7 @@ class TaskSessionService {
       await task.save();
     }
     
-    return session;
+    return updatedSession;
   }
 
   async getActiveSession() {
@@ -139,9 +157,17 @@ class TaskSessionService {
 
   async updateTaskTime(taskId, seconds) {
     checkDB();
-    const minutes = Math.floor(seconds / 60);
+    const task = await Task.findById(taskId);
+    if (!task) return;
+    
+    const currentTotalSeconds = (task.actualSeconds || Math.floor((task.actualMinutes || 0) * 60)) + seconds;
+    const newMinutes = Math.floor(currentTotalSeconds / 60);
+    
     await Task.findByIdAndUpdate(taskId, {
-      $inc: { actualMinutes: minutes },
+      $set: { 
+        actualSeconds: currentTotalSeconds,
+        actualMinutes: newMinutes
+      },
     });
   }
 

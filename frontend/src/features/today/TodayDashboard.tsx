@@ -480,6 +480,11 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
                           <span className="border border-current px-1 py-0.2 font-mono text-[9px] uppercase">
                             {task.category}
                           </span>
+                          {task.actualMinutes > 0 && (
+                            <span className="font-bold text-[10px] text-green-600 group-hover:text-green-300">
+                              TRACKED: {task.actualMinutes}m
+                            </span>
+                          )}
                         </div>
 
                         <div className="flex items-center space-x-2">

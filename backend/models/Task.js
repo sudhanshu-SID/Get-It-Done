@@ -13,6 +13,7 @@ const TaskSchema = new mongoose.Schema({
   dueDate: String,
   estimatedMinutes: { type: Number, default: 0 },
   actualMinutes: { type: Number, default: 0 },
+  actualSeconds: { type: Number, default: 0 },
   recurrence: { type: String, enum: ['none', 'daily', 'weekly', 'weekdays'], default: 'none' },
   completedAt: String,
   notes: String,
