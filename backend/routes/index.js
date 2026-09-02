@@ -230,7 +230,7 @@ router.post('/timer/stop', async (req, res) => {
     const totalSeconds = timer.accumulatedSeconds + diff;
     const durationMins = Math.floor(totalSeconds / 60) || 1; 
 
-    const session = await TaskSession.create({ taskId: timer.taskId, taskTitle: timer.taskTitle, startTime: timer.createdAt, endTime: new Date().toISOString(), durationMinutes: durationMins });
+    const session = await TaskSession.create({ taskId: timer.taskId, taskTitle: timer.taskTitle, startTime: timer.startTime, endTime: new Date().toISOString(), durationMinutes: durationMins });
     const task = await Task.findByIdAndUpdate(timer.taskId, { $inc: { actualMinutes: durationMins } }, { returnDocument: 'after' });
     if(timer.projectId) await Project.findByIdAndUpdate(timer.projectId, { $inc: { totalTimeMinutes: durationMins } });
     
@@ -342,7 +342,7 @@ router.get('/daily/today', async (req, res) => {
     }
 
     const todaySessions = await TaskSession.find({
-      startTime: { $gte: startOfToday.toISOString() }
+      createdAt: { $gte: startOfToday }
     });
     const totalTrackedMinutesToday = todaySessions.reduce((sum, s) => sum + (s.durationMinutes || 0), 0);
 

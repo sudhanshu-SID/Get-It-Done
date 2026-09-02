@@ -12,7 +12,8 @@ class DailyService {
   async getTodayRecord() {
     checkDB();
     const today = startOfDay(new Date());
-    let record = await DailyRecord.findOne({ date: today });
+    const todayStr = format(today, 'yyyy-MM-dd');
+    let record = await DailyRecord.findOne({ date: todayStr });
     
     if (!record) {
       record = await this.createTodayRecord();
@@ -45,7 +46,7 @@ class DailyService {
     const timezone = user?.timezone || 'UTC';
     
     const record = new DailyRecord({
-      date: today,
+      date: todayStr,
       timezone,
       requiredTaskIds,
       optionalTaskIds,
@@ -62,26 +63,31 @@ class DailyService {
   async getYesterdayRecord() {
     checkDB();
     const yesterday = startOfDay(subDays(new Date(), 1));
-    return DailyRecord.findOne({ date: yesterday });
+    const yesterdayStr = format(yesterday, 'yyyy-MM-dd');
+    return DailyRecord.findOne({ date: yesterdayStr });
   }
 
   async getRecordByDate(date) {
     checkDB();
     const day = startOfDay(new Date(date));
-    return DailyRecord.findOne({ date: day });
+    const dayStr = format(day, 'yyyy-MM-dd');
+    return DailyRecord.findOne({ date: dayStr });
   }
 
   async getRecordsForRange(startDate, endDate) {
     checkDB();
     const start = startOfDay(new Date(startDate));
     const end = endOfDay(new Date(endDate));
-    return DailyRecord.find({ date: { $gte: start, $lte: end } }).sort({ date: -1 });
+    const startStr = format(start, 'yyyy-MM-dd');
+    const endStr = format(end, 'yyyy-MM-dd');
+    return DailyRecord.find({ date: { $gte: startStr, $lte: endStr } }).sort({ date: -1 });
   }
 
   async markNoProgressToday() {
     checkDB();
     const today = startOfDay(new Date());
-    let record = await DailyRecord.findOne({ date: today });
+    const todayStr = format(today, 'yyyy-MM-dd');
+    let record = await DailyRecord.findOne({ date: todayStr });
     
     if (!record) {
       record = await this.createTodayRecord();
@@ -101,7 +107,8 @@ class DailyService {
   async updateRecord(date, data) {
     checkDB();
     const day = startOfDay(new Date(date));
-    return DailyRecord.findOneAndUpdate({ date: day }, data, { returnDocument: 'after', runValidators: true });
+    const dayStr = format(day, 'yyyy-MM-dd');
+    return DailyRecord.findOneAndUpdate({ date: dayStr }, data, { returnDocument: 'after', runValidators: true });
   }
 
   async evaluateCommitments(dailyRecord) {
@@ -225,7 +232,8 @@ class DailyService {
   async runDailyEvaluation(date = new Date()) {
     checkDB();
     const day = startOfDay(new Date(date));
-    const record = await DailyRecord.findOne({ date: day });
+    const dayStr = format(day, 'yyyy-MM-dd');
+    const record = await DailyRecord.findOne({ date: dayStr });
     
     if (!record) {
       return { message: 'No record for this date', strikesCreated: 0 };
@@ -270,7 +278,8 @@ class DailyService {
     
     for (let i = 1; i <= daysToLookBack; i++) {
       const pastDate = subDays(today, i);
-      let record = await DailyRecord.findOne({ date: pastDate });
+      const pastDateStr = format(pastDate, 'yyyy-MM-dd');
+      let record = await DailyRecord.findOne({ date: pastDateStr });
       
       if (!record) {
         const pastDateStr = format(pastDate, 'yyyy-MM-dd');
@@ -288,7 +297,7 @@ class DailyService {
           .map(t => t._id);
           
         record = new DailyRecord({
-          date: pastDate,
+          date: pastDateStr,
           timezone: 'UTC',
           requiredTaskIds,
           optionalTaskIds,
@@ -316,7 +325,8 @@ class DailyService {
   async getTodaySummary() {
     checkDB();
     const today = startOfDay(new Date());
-    const record = await DailyRecord.findOne({ date: today });
+    const todayStr = format(today, 'yyyy-MM-dd');
+    const record = await DailyRecord.findOne({ date: todayStr });
     
     if (!record) {
       return {
@@ -332,7 +342,6 @@ class DailyService {
       };
     }
     
-    const todayStr = format(today, 'yyyy-MM-dd');
     const tasks = await Task.find({ scheduledDate: todayStr });
     
     const requiredTotal = tasks.filter(t => t.commitmentLevel === 'required').length;
