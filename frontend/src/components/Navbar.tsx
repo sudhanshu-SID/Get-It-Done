@@ -73,8 +73,8 @@ export const Navbar: React.FC<NavbarProps> = ({
     }
 
     const calculateElapsed = () => {
-      let totalSec = activeTimer.elapsedSeconds;
-      if (activeTimer.status !== 'paused') {
+      let totalSec = activeTimer.accumulatedSeconds || 0;
+      if (activeTimer.status !== 'paused' && activeTimer.startTime) {
         const start = new Date(activeTimer.startTime).getTime();
         const now = Date.now();
         const diff = Math.max(0, Math.floor((now - start) / 1000));

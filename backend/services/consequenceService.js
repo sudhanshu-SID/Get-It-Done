@@ -38,28 +38,59 @@ class ConsequenceService {
 
   async resolveConsequence(id) {
     checkDB();
-    const consequence = await Consequence.findByIdAndUpdate(
-      id,
-      { status: 'resolved', resolvedAt: new Date() },
-      { returnDocument: 'after' }
-    );
-    
-    if (consequence) {
-      await AccountabilityLog.create({
-        source: 'user',
-        action: 'consequence_resolved',
-        message: `Consequence resolved: ${consequence.title}`,
-        metadata: { consequenceId: consequence._id },
-      });
-      
-      if (consequence.type === 'financial') {
-        const gamification = await Gamification.findOne();
+    const consequence = await Consequence.findById(id);
+    if (!consequence) return null;
+
+    consequence.status = 'resolved';
+    consequence.resolvedAt = new Date().toISOString();
+
+    let resolvedStrikesCount = 0;
+    if (consequence.autoResolveStrikes !== false) {
+      const match = consequence.trigger ? consequence.trigger.match(/(\d+)/) : null;
+      const triggerStrikes = match ? parseInt(match[1], 10) : 10;
+
+      // Find the oldest open strikes up to trigger threshold
+      const openStrikes = await Strike.find({ status: 'open' })
+        .sort({ number: 1 })
+        .limit(triggerStrikes);
+
+      resolvedStrikesCount = openStrikes.length;
+      if (resolvedStrikesCount > 0) {
+        const strikeIds = openStrikes.map(s => s._id);
+        await Strike.updateMany(
+          { _id: { $in: strikeIds } },
+          { 
+            status: 'resolved', 
+            notes: `Auto-resolved by completing penalty: ${consequence.title}` 
+          }
+        );
+
+        let gamification = await Gamification.findOne();
         if (gamification) {
-          gamification.monetaryPenaltyOwed = Math.max(0, gamification.monetaryPenaltyOwed - (consequence.value || 0));
+          gamification.currentStrikes = Math.max(0, (gamification.currentStrikes || 0) - resolvedStrikesCount);
           await gamification.save();
         }
       }
     }
+
+    consequence.strikesResolvedCount = resolvedStrikesCount;
+    await consequence.save();
+
+    if (consequence.type === 'financial') {
+      const gamification = await Gamification.findOne();
+      if (gamification) {
+        const numericValue = parseFloat(String(consequence.value || '0').replace(/[^0-9.]/g, '')) || 0;
+        gamification.monetaryPenaltyOwed = Math.max(0, (gamification.monetaryPenaltyOwed || 0) - numericValue);
+        await gamification.save();
+      }
+    }
+
+    await AccountabilityLog.create({
+      source: 'user',
+      action: 'consequence_resolved',
+      message: `Penalty served: "${consequence.title}". Automatically resolved ${resolvedStrikesCount} strikes.`,
+      metadata: { consequenceId: consequence._id, strikesResolved: resolvedStrikesCount },
+    });
     
     return consequence;
   }

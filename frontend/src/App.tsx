@@ -19,6 +19,7 @@ import { RewardList } from './features/rewards/RewardList';
 import { RewardModal } from './features/rewards/RewardModal';
 import { StrikeList } from './features/strikes/StrikeList';
 import { StrikeModal } from './features/strikes/StrikeModal';
+import { ConsequenceModal } from './features/strikes/ConsequenceModal';
 import { AnalyticsDashboard } from './features/analytics/AnalyticsDashboard';
 import { SettingsView } from './features/settings/SettingsView';
 import { AgentInspectorModal } from './features/agent/AgentInspectorModal';
@@ -76,6 +77,8 @@ export default function App() {
   const [selectedRewardForEdit, setSelectedRewardForEdit] = useState<Reward | null>(null);
 
   const [isStrikeModalOpen, setIsStrikeModalOpen] = useState(false);
+  const [isConsequenceModalOpen, setIsConsequenceModalOpen] = useState(false);
+  const [selectedConsequenceForEdit, setSelectedConsequenceForEdit] = useState<Consequence | null>(null);
   const [isAgentInspectorOpen, setIsAgentInspectorOpen] = useState(false);
   
   const [dsaPromptTask, setDsaPromptTask] = useState<Task | null>(null);
@@ -357,6 +360,26 @@ export default function App() {
     await refreshAllData();
   };
 
+  // Consequence / Penalty Actions
+  const handleSaveConsequence = async (conData: Partial<Consequence>) => {
+    if (selectedConsequenceForEdit && selectedConsequenceForEdit._id) {
+      await apiService.updateConsequence(selectedConsequenceForEdit._id, conData);
+    } else {
+      await apiService.createConsequence(conData);
+    }
+    await refreshAllData();
+  };
+
+  const handleDeleteConsequence = async (id: string) => {
+    await apiService.deleteConsequence(id);
+    await refreshAllData();
+  };
+
+  const handleResolveConsequence = async (id: string) => {
+    await apiService.resolveConsequence(id);
+    await refreshAllData();
+  };
+
   // Zero Progress ("I DID NOTHING TODAY")
   const handleTriggerRecordNoProgress = () => {
     setConfirmConfig({
@@ -438,6 +461,9 @@ export default function App() {
           <TodayDashboard
             data={todayData}
             activeTimer={activeTimer}
+            activeConsequences={consequences.filter(c => c.status === 'active' || strikes.filter(s => s.status === 'open').length >= (parseInt(c.trigger?.match(/\d+/)?.[0] || '10', 10)))}
+            onResolveConsequence={handleResolveConsequence}
+            onNavigateToStrikes={() => setActiveTab('strikes')}
             onCompleteTask={handleCompleteTask}
             onUncompleteTask={handleUncompleteTask}
             onStartTimer={handleStartTimer}
@@ -550,6 +576,12 @@ export default function App() {
             onOpenStrikeModal={() => setIsStrikeModalOpen(true)}
             onResolveStrike={handleResolveStrike}
             onDeleteStrike={handleDeleteStrike}
+            onOpenConsequenceModal={consequence => {
+              setSelectedConsequenceForEdit(consequence || null);
+              setIsConsequenceModalOpen(true);
+            }}
+            onDeleteConsequence={handleDeleteConsequence}
+            onResolveConsequence={handleResolveConsequence}
           />
         )}
 
@@ -641,6 +673,17 @@ export default function App() {
         onClose={() => setIsStrikeModalOpen(false)}
         onSave={handleSaveStrike}
         consequences={consequences}
+      />
+
+      <ConsequenceModal
+        isOpen={isConsequenceModalOpen}
+        onClose={() => {
+          setIsConsequenceModalOpen(false);
+          setSelectedConsequenceForEdit(null);
+        }}
+        onSave={handleSaveConsequence}
+        initialConsequence={selectedConsequenceForEdit}
+        currentStrikes={strikes.filter(s => s.status === 'open').length}
       />
 
       {settings && (

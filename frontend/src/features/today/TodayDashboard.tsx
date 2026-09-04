@@ -21,12 +21,16 @@ import {
   FolderKanban, 
   Check 
 } from 'lucide-react';
-import { TodayDashboardData, Task, Project, ActiveTimer } from '../../types/index';
+import { TodayDashboardData, Task, Project, ActiveTimer, Consequence } from '../../types/index';
 import { StickyBoard } from '../notes/StickyBoard';
+import { ActivePenaltyBanner } from '../strikes/ActivePenaltyBanner';
 
 interface TodayDashboardProps {
   data: TodayDashboardData;
   activeTimer: ActiveTimer | null;
+  activeConsequences?: Consequence[];
+  onResolveConsequence?: (id: string) => Promise<void>;
+  onNavigateToStrikes?: () => void;
   onCompleteTask: (task: Task) => Promise<void>;
   onUncompleteTask: (taskId: string) => Promise<void>;
   onStartTimer: (taskId: string) => Promise<void>;
@@ -45,6 +49,9 @@ interface TodayDashboardProps {
 export const TodayDashboard: React.FC<TodayDashboardProps> = ({
   data,
   activeTimer,
+  activeConsequences = [],
+  onResolveConsequence,
+  onNavigateToStrikes,
   onCompleteTask,
   onUncompleteTask,
   onStartTimer,
@@ -64,6 +71,38 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
   const [dailyNoteText, setDailyNoteText] = useState(data.dailyNote || '');
   const [isSavingNote, setIsSavingNote] = useState(false);
   const [noteSavedFeedback, setNoteSavedFeedback] = useState(false);
+  const [focusTimerDisplay, setFocusTimerDisplay] = useState('00:00');
+
+  React.useEffect(() => {
+    if (!activeTimer) {
+      setFocusTimerDisplay('00:00');
+      return;
+    }
+
+    const calculateElapsed = () => {
+      let totalSec = activeTimer.accumulatedSeconds || 0;
+      if (activeTimer.status !== 'paused' && activeTimer.startTime) {
+        const start = new Date(activeTimer.startTime).getTime();
+        const now = Date.now();
+        const diff = Math.max(0, Math.floor((now - start) / 1000));
+        totalSec += diff;
+      }
+      const hrs = Math.floor(totalSec / 3600);
+      const mins = Math.floor((totalSec % 3600) / 60);
+      const secs = totalSec % 60;
+      if (hrs > 0) {
+        setFocusTimerDisplay(
+          `${String(hrs).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
+        );
+      } else {
+        setFocusTimerDisplay(`${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`);
+      }
+    };
+
+    calculateElapsed();
+    const interval = setInterval(calculateElapsed, 1000);
+    return () => clearInterval(interval);
+  }, [activeTimer]);
 
   const getGreeting = () => {
     const hour = new Date().getHours();
@@ -96,6 +135,15 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
   return (
     <div className="space-y-6 pb-12">
       <StickyBoard />
+
+      {/* Active Penalty Banner with Live Countdown */}
+      {activeConsequences && activeConsequences.length > 0 && onResolveConsequence && (
+        <ActivePenaltyBanner
+          activeConsequences={activeConsequences}
+          onResolveConsequence={onResolveConsequence}
+          onNavigateToStrikes={onNavigateToStrikes}
+        />
+      )}
       {/* High Density Metric Top Header Banner */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between border-b-2 border-[#141414] pb-4 gap-4">
         <div>
@@ -222,6 +270,9 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
             </div>
 
             <div className="flex items-center space-x-2">
+              <div className="border border-[#141414] bg-white px-3 py-1.5 text-xs font-mono font-bold tracking-wider text-[#141414]">
+                ⏱ {focusTimerDisplay}
+              </div>
               {activeTimer.status === 'paused' ? (
                 <button
                   id="resume-working-timer-btn"

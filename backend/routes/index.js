@@ -39,7 +39,58 @@ makeCrud(Task, '/tasks');
 makeCrud(Project, '/projects');
 makeCrud(Goal, '/goals');
 makeCrud(Reward, '/rewards');
-makeCrud(Consequence, '/consequences');
+// Consequence Routes
+router.get('/consequences', async (req, res) => {
+  try { res.json({ success: true, data: await Consequence.find().sort({ createdAt: -1 }) }); }
+  catch(e) { res.status(500).json({ success: false, message: e.message }); }
+});
+router.get('/consequences/:id', async (req, res) => {
+  try { res.json({ success: true, data: await Consequence.findById(req.params.id) }); }
+  catch(e) { res.status(500).json({ success: false, message: e.message }); }
+});
+router.post('/consequences', async (req, res) => {
+  try {
+    const data = { ...req.body };
+    const openCount = await Strike.countDocuments({ status: 'open' });
+    const match = data.trigger ? data.trigger.match(/(\d+)/) : null;
+    const threshold = match ? parseInt(match[1], 10) : 10;
+    if (openCount >= threshold) {
+      data.status = 'active';
+      const now = new Date();
+      data.triggeredAt = now.toISOString();
+      data.startDate = now.toISOString();
+      if (data.durationDays && data.durationDays > 0) {
+        data.endDate = new Date(now.getTime() + data.durationDays * 86400000).toISOString();
+      }
+    }
+    const consequence = await Consequence.create(data);
+    const strikeService = require('../services/strikeService');
+    await strikeService.checkAndTriggerConsequences();
+    const updated = await Consequence.findById(consequence._id);
+    res.json({ success: true, data: updated || consequence });
+  } catch(e) { res.status(500).json({ success: false, message: e.message }); }
+});
+router.patch('/consequences/:id', async (req, res) => {
+  try {
+    const consequence = await Consequence.findByIdAndUpdate(req.params.id, req.body, { returnDocument: 'after' });
+    const strikeService = require('../services/strikeService');
+    await strikeService.checkAndTriggerConsequences();
+    const updated = await Consequence.findById(req.params.id);
+    res.json({ success: true, data: updated || consequence });
+  } catch(e) { res.status(500).json({ success: false, message: e.message }); }
+});
+router.delete('/consequences/:id', async (req, res) => {
+  try { await Consequence.findByIdAndDelete(req.params.id); res.json({ success: true, data: { message: 'Deleted' } }); }
+  catch(e) { res.status(500).json({ success: false, message: e.message }); }
+});
+router.post('/consequences/:id/resolve', async (req, res) => {
+  try {
+    const { consequenceService } = require('../services');
+    const consequence = await consequenceService.resolveConsequence(req.params.id);
+    if (!consequence) return res.status(404).json({ success: false, message: 'Consequence not found' });
+    res.json({ success: true, data: consequence });
+  } catch(e) { res.status(500).json({ success: false, message: e.message }); }
+});
 
 // Note Routes
 const noteController = require('../controllers/noteController');

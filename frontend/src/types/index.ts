@@ -127,6 +127,11 @@ export interface Consequence {
   trigger: string;
   value: string;
   status: ConsequenceStatus;
+  durationDays?: number;
+  startDate?: string;
+  endDate?: string;
+  autoResolveStrikes?: boolean;
+  strikesResolvedCount?: number;
   triggeredAt?: string;
   resolvedAt?: string;
   notes?: string;

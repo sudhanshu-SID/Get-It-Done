@@ -200,6 +200,10 @@ export const apiService = {
     fetchJson<{ message: string }>(`/api/consequences/${id}`, {
       method: 'DELETE'
     }),
+  resolveConsequence: (id: string) =>
+    fetchJson<Consequence>(`/api/consequences/${id}/resolve`, {
+      method: 'POST'
+    }),
 
   getStrikes: () => fetchJson<Strike[]>('/api/strikes'),
   createStrike: (strike: Partial<Strike>) =>

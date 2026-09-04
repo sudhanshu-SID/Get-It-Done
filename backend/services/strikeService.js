@@ -153,27 +153,46 @@ class StrikeService {
   async checkAndTriggerConsequences(totalStrikes) {
     checkDB();
     const consequences = await Consequence.find({ status: 'pending' });
+    if (!consequences || consequences.length === 0) return;
+
+    let strikesCount = totalStrikes;
+    if (strikesCount === undefined || strikesCount === null) {
+      const openCount = await Strike.countDocuments({ status: 'open' });
+      const lastStrike = await Strike.findOne().sort({ number: -1 });
+      const totalCount = lastStrike?.number || 0;
+      strikesCount = Math.max(openCount, totalCount);
+    }
     
     for (const consequence of consequences) {
-      const triggerMatch = consequence.trigger.match(/(\d+)\s*strikes?/i);
+      const triggerMatch = consequence.trigger ? consequence.trigger.match(/(\d+)/) : null;
       if (triggerMatch) {
-        const triggerStrikes = parseInt(triggerMatch[1]);
-        if (totalStrikes >= triggerStrikes) {
+        const triggerStrikes = parseInt(triggerMatch[1], 10);
+        if (strikesCount >= triggerStrikes) {
           consequence.status = 'active';
-          consequence.triggeredAt = new Date();
+          const now = new Date();
+          consequence.triggeredAt = now.toISOString();
+          consequence.startDate = now.toISOString();
+          if (consequence.durationDays && consequence.durationDays > 0) {
+            const endDate = new Date(now.getTime() + consequence.durationDays * 24 * 60 * 60 * 1000);
+            consequence.endDate = endDate.toISOString();
+          }
           await consequence.save();
           
-          const gamification = await Gamification.findOne();
-          if (gamification && consequence.type === 'financial') {
-            gamification.monetaryPenaltyOwed += consequence.value || 0;
-            await gamification.save();
+          let gamification = await Gamification.findOne();
+          if (!gamification) {
+            gamification = new Gamification({ userId: 'default_user', currentStrikes: strikesCount });
           }
+          if (consequence.type === 'financial') {
+            const numericValue = parseFloat(String(consequence.value || '0').replace(/[^0-9.]/g, '')) || 0;
+            gamification.monetaryPenaltyOwed = (gamification.monetaryPenaltyOwed || 0) + numericValue;
+          }
+          await gamification.save();
           
           await AccountabilityLog.create({
             source: 'system',
             action: 'consequence_triggered',
-            message: `Consequence triggered by strike #${totalStrikes}: ${consequence.title}`,
-            metadata: { consequenceId: consequence._id, totalStrikes },
+            message: `Consequence triggered by strike #${strikesCount}: ${consequence.title} (${consequence.trigger})`,
+            metadata: { consequenceId: consequence._id, strikesCount },
           });
         }
       }
