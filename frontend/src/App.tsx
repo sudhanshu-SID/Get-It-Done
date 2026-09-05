@@ -98,55 +98,153 @@ export default function App() {
     onConfirm: async () => {}
   });
 
-  // Master Data Refresh
-  const refreshAllData = useCallback(async () => {
+  // Load essential Today data (Fast path)
+  const loadTodayData = useCallback(async () => {
     try {
-      const [
-        todayRes,
-        tasksRes,
-        projectsRes,
-        goalsRes,
-        rewardsRes,
-        strikesRes,
-        consequencesRes,
-        analyticsRes,
-        settingsRes,
-        timerRes
-      ] = await Promise.all([
+      const [todayRes, timerRes] = await Promise.all([
         apiService.getTodayDashboard(),
-        apiService.getTasks(),
-        apiService.getProjects(),
-        apiService.getGoals(),
-        apiService.getRewards(),
-        apiService.getStrikes(),
-        apiService.getConsequences(),
-        apiService.getAnalytics(),
-        apiService.getSettings(),
         apiService.getActiveTimer()
       ]);
-
       setTodayData(todayRes);
-      setTasks(tasksRes);
-      setProjects(projectsRes);
-      setGoals(goalsRes);
-      setRewards(rewardsRes);
-      setStrikes(strikesRes);
-      setConsequences(consequencesRes);
-      setAnalytics(analyticsRes);
-      setSettings(settingsRes);
       setActiveTimer(timerRes);
       setError(null);
     } catch (err: any) {
-      console.error('Failed to load application data', err);
-      setError(err.message || 'Failed to sync with backend');
-    } finally {
-      setIsLoading(false);
+      console.error('Failed to load today data', err);
+      setError(err.message || 'Failed to sync today data');
     }
   }, []);
 
+  // Load tab-specific data on-demand (Lazy Loading)
+  const loadTabData = useCallback(async (tab: NavTab) => {
+    try {
+      switch (tab) {
+        case 'today':
+          await loadTodayData();
+          break;
+        case 'tasks': {
+          const [tasksRes, projectsRes] = await Promise.all([
+            apiService.getTasks(),
+            apiService.getProjects()
+          ]);
+          setTasks(tasksRes);
+          setProjects(projectsRes);
+          break;
+        }
+        case 'projects': {
+          const [projectsRes, tasksRes] = await Promise.all([
+            apiService.getProjects(),
+            apiService.getTasks()
+          ]);
+          setProjects(projectsRes);
+          setTasks(tasksRes);
+          break;
+        }
+        case 'goals': {
+          const [goalsRes, projectsRes] = await Promise.all([
+            apiService.getGoals(),
+            apiService.getProjects()
+          ]);
+          setGoals(goalsRes);
+          setProjects(projectsRes);
+          break;
+        }
+        case 'rewards': {
+          const [rewardsRes, goalsRes] = await Promise.all([
+            apiService.getRewards(),
+            apiService.getGoals()
+          ]);
+          setRewards(rewardsRes);
+          setGoals(goalsRes);
+          break;
+        }
+        case 'strikes': {
+          const [strikesRes, consequencesRes] = await Promise.all([
+            apiService.getStrikes(),
+            apiService.getConsequences()
+          ]);
+          setStrikes(strikesRes);
+          setConsequences(consequencesRes);
+          break;
+        }
+        case 'analytics': {
+          const analyticsRes = await apiService.getAnalytics();
+          setAnalytics(analyticsRes);
+          break;
+        }
+        case 'settings': {
+          const settingsRes = await apiService.getSettings();
+          setSettings(settingsRes);
+          break;
+        }
+      }
+    } catch (err: any) {
+      console.error(`Failed to load data for tab: ${tab}`, err);
+    }
+  }, [loadTodayData]);
+
+  // Fast Refresh: Refreshes today data + currently active tab
+  const refreshAllData = useCallback(async () => {
+    await loadTodayData();
+    if (activeTab !== 'today') {
+      await loadTabData(activeTab);
+    }
+  }, [activeTab, loadTodayData, loadTabData]);
+
+  // Initial Load: Only fetch what's needed for the initial screen
   useEffect(() => {
-    refreshAllData();
-  }, [refreshAllData]);
+    const initApp = async () => {
+      setIsLoading(true);
+      try {
+        const [todayRes, timerRes, settingsRes, consequencesRes] = await Promise.all([
+          apiService.getTodayDashboard(),
+          apiService.getActiveTimer(),
+          apiService.getSettings(),
+          apiService.getConsequences()
+        ]);
+
+        setTodayData(todayRes);
+        setActiveTimer(timerRes);
+        setSettings(settingsRes);
+        setConsequences(consequencesRes);
+        setError(null);
+
+        // Check if there was an uncommitted pending stop session from a previous cold-start
+        const pendingStop = localStorage.getItem('gid_pending_timer_stop');
+        if (pendingStop) {
+          apiService.stopTimer().then(() => {
+            localStorage.removeItem('gid_pending_timer_stop');
+          }).catch(e => console.warn('Pending timer sync will retry on next action:', e));
+        }
+      } catch (err: any) {
+        console.error('Failed to initialize application data', err);
+        setError(err.message || 'Failed to sync with backend');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    initApp();
+  }, []);
+
+  // When switching tabs, load data for that tab on demand
+  useEffect(() => {
+    if (activeTab !== 'today') {
+      loadTabData(activeTab);
+    }
+  }, [activeTab, loadTabData]);
+
+  // Heartbeat: Ping backend every 9 minutes while a timer is running to prevent Render from going to sleep
+  useEffect(() => {
+    if (!activeTimer || activeTimer.status !== 'running') return;
+
+    const interval = setInterval(() => {
+      apiService.ping().catch(err => {
+        console.debug('Heartbeat ping failed:', err);
+      });
+    }, 9 * 60 * 1000);
+
+    return () => clearInterval(interval);
+  }, [activeTimer?.status]);
 
   // Live Timer Interval (Calculates elapsed seconds live in UI)
   useEffect(() => {
@@ -258,13 +356,28 @@ export default function App() {
   };
 
   const handleStopTimer = async () => {
-    try {
-      await apiService.stopTimer();
-      setActiveTimer(null);
-      await refreshAllData();
-    } catch (err) {
-      console.error('Error stopping timer', err);
-    }
+    // Record pending stop in localStorage to guarantee zero time loss if Render is cold-starting
+    localStorage.setItem('gid_pending_timer_stop', JSON.stringify({ stoppedAt: Date.now() }));
+    // Optimistically update UI immediately
+    setActiveTimer(null);
+
+    const attemptStop = async (retries = 4): Promise<void> => {
+      try {
+        await apiService.stopTimer();
+        localStorage.removeItem('gid_pending_timer_stop');
+        await loadTodayData();
+        if (activeTab !== 'today') {
+          await loadTabData(activeTab);
+        }
+      } catch (err) {
+        console.warn(`Stop timer attempt failed (${retries} retries left):`, err);
+        if (retries > 0) {
+          setTimeout(() => attemptStop(retries - 1), 5000);
+        }
+      }
+    };
+
+    await attemptStop();
   };
 
   const handleSaveTask = async (taskData: Partial<Task>) => {

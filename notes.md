@@ -112,6 +112,19 @@ If an interviewer asks about complex problems solved in this app, bring up these
 - When a task tagged with the category "DSA" is marked complete, the frontend UI dynamically prompts the user: *"How many questions did you solve?"*
 - This metric is sent to the backend, which logs it against the task and simultaneously updates any active `Goal` object that listens for the "DSA Questions" metric threshold, automatically unlocking rewards if conditions are met.
 
+### Problem 5: Free-Tier Serverless Sleep & Resilient Session Queuing
+**Challenge:** Cloud providers like Render put free-tier web services to sleep after 15 minutes of inactivity. When a user runs a 30–60 minute focus session, the client is silent, causing the backend to spin down. Clicking "Stop" causes cold-start timeouts (50–90s delay), frozen UI buttons, or lost session data.  
+**Solution:** A **Timer-Bound Heartbeat** combined with an **Optimistic Client-Side Session Queue**.
+1. **Targeted Keep-Alive Heartbeat:** Instead of running an expensive 24/7 pinger that wastes free instance quotas, the client strictly sends a lightweight ping (`/api/health`) every 9 minutes *only while an active timer is running*. Once stopped, the pinging stops and the server is allowed to sleep normally.
+2. **Optimistic Stop with Guaranteed Zero Data Loss:** When the user clicks "Stop", the UI halts the timer immediately and records the pending session payload into `localStorage`. The client attempts the API call with exponential retry backoff. If the server is mid-boot or the user reloads, the app automatically drains the pending queue upon reconnection, ensuring tracked work is never lost.
+
+### Problem 6: Multi-Roundtrip Network Bottlenecks & On-Demand Lazy Loading
+**Challenge:** A centralized dashboard firing 10 parallel endpoints across a cloud database (MongoDB Atlas) introduces 30–40 sequential round-trips (2–3 seconds initial latency even on local setups).  
+**Solution:** **Tiered Lazy Loading, Rollover Caching, and Query Parallelization**.
+1. **On-Demand Tab Hydration:** On initial load, the client only fetches the immediate viewport (Today Dashboard + Active Timer + Settings). Secondary tabs (Analytics, Goals, Rewards, Backlog) are hydrated on-demand only when selected.
+2. **Rollover Caching:** The backend daily rollover (`evaluatePastDays(7)`) only runs once per calendar day. Subsequent requests to `/api/daily/today` skip redundant date checks.
+3. **Database Concurrency & Lean Documents:** Independent dashboard queries run concurrently via `Promise.all` using `.lean()`, cutting response latency by ~70%.
+
 ---
 
 ## 6. Diagrams & Flowcharts

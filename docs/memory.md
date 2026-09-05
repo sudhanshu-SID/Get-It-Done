@@ -14,6 +14,8 @@
 - **Reward Automation:** Rewards unlock automatically the moment their associated goals hit target thresholds, and re-lock if the progress reverses.
 - **Design Philosophy:** Utilitarian, distraction-free brutalism. Solid blacks, stark whites, and red warnings.
 - **Deployment Strategy:** Single-tenant local/personal instance deployed to the cloud for a 1-week test phase before introducing multi-tenant auth and data separation.
+- **Serverless Sleep Mitigation:** Configured an active-timer-only heartbeat (pinging `/api/health` every 9 minutes during running timers) to prevent Render from idling out during deep work sessions, paired with an optimistic localStorage queue to ensure zero session data loss during server spin-ups.
+- **Performance & Lazy Loading:** Transitioned the frontend to tiered lazy-loading (initial payload loads only Today + Active Timer + Settings, loading secondary tabs on demand) and parallelized backend dashboard queries with `.lean()` and rollover caching.
 
 ## Next Immediate Action
 - **Live Testing Phase:** Use the deployed application for ~1 week to dogfood the mechanics, test the UX, and uncover any edge-case bugs.

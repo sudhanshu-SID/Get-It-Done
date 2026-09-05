@@ -292,14 +292,27 @@ class DailyService {
     const today = startOfDay(new Date());
     let strikesCreatedTotal = 0;
     
+    // Batch lookup all past days in one single query
+    const pastDates = [];
+    const pastDateStrings = [];
     for (let i = 1; i <= daysToLookBack; i++) {
       const pastDate = subDays(today, i);
-      const pastDateStr = format(pastDate, 'yyyy-MM-dd');
-      let record = await DailyRecord.findOne({ date: pastDateStr });
+      pastDates.push(pastDate);
+      pastDateStrings.push(format(pastDate, 'yyyy-MM-dd'));
+    }
+
+    const existingRecords = await DailyRecord.find({ date: { $in: pastDateStrings } });
+    const recordMap = new Map();
+    for (const rec of existingRecords) {
+      recordMap.set(rec.date, rec);
+    }
+
+    for (let i = 0; i < pastDates.length; i++) {
+      const pastDate = pastDates[i];
+      const pastDateStr = pastDateStrings[i];
+      let record = recordMap.get(pastDateStr);
       
       if (!record) {
-        const pastDateStr = format(pastDate, 'yyyy-MM-dd');
-        
         const tasks = await Task.find({
           scheduledDate: pastDateStr,
         });
@@ -324,6 +337,7 @@ class DailyService {
           status: (requiredTaskIds.length === 0 && optionalTaskIds.length === 0) ? 'no_progress' : 'partial',
         });
         await record.save();
+        recordMap.set(pastDateStr, record);
       }
       
       if (record && !record.evaluationId) {

@@ -300,53 +300,85 @@ router.get('/tasks/:id/sessions', async (req, res) => {
   catch(e) { res.status(500).json({ success: false, message: e.message }); }
 });
 
+let lastDailyRolloverDate = null;
+
+// Lightweight heartbeat ping endpoint
+router.get('/health', (req, res) => res.json({ status: 'ok', timestamp: Date.now() }));
+
 router.get('/daily/today', async (req, res) => {
   try {
     const todayStr = new Date().toISOString().split('T')[0];
     const startOfToday = new Date();
     startOfToday.setHours(0, 0, 0, 0);
     
-    // Evaluate past days before rolling over tasks to ensure strikes are issued for yesterday
-    await dailyService.evaluatePastDays(7);
+    // Only run past-days evaluation and recurrence rollover once per day to avoid redundant DB overhead
+    if (lastDailyRolloverDate !== todayStr) {
+      await dailyService.evaluatePastDays(7);
 
-    // Roll over all recurring tasks from previous days (completed or missed) to today
-    await Task.updateMany(
-      { 
-        recurrence: { $ne: 'none' },
-        scheduledDate: { $lt: todayStr }
-      },
-      {
-        $set: {
-          status: 'todo',
-          scheduledDate: todayStr,
-          actualMinutes: 0,
-          completedAt: null
+      // Roll over all recurring tasks from previous days to today
+      await Task.updateMany(
+        { 
+          recurrence: { $ne: 'none' },
+          scheduledDate: { $lt: todayStr }
+        },
+        {
+          $set: {
+            status: 'todo',
+            scheduledDate: todayStr,
+            actualMinutes: 0,
+            completedAt: null
+          }
         }
-      }
-    );
+      );
 
-    // Reset actualMinutes for all incomplete tasks from previous days so today starts fresh
-    await Task.updateMany(
-      {
-        status: { $ne: 'completed' },
-        updatedAt: { $lt: startOfToday },
-        actualMinutes: { $gt: 0 }
-      },
-      {
-        $set: { actualMinutes: 0 }
-      }
-    );
+      // Reset actualMinutes for all incomplete tasks from previous days so today starts fresh
+      await Task.updateMany(
+        {
+          status: { $ne: 'completed' },
+          updatedAt: { $lt: startOfToday },
+          actualMinutes: { $gt: 0 }
+        },
+        {
+          $set: { actualMinutes: 0 }
+        }
+      );
 
-    const tasks = await Task.find();
-    const projects = await Project.find();
-    
+      lastDailyRolloverDate = todayStr;
+    }
+
+    const yesterday = new Date(startOfToday);
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayStr = yesterday.toISOString().split('T')[0];
+
+    // Fetch all read-only dashboard data concurrently with .lean() for fast retrieval
+    const [
+      tasks,
+      projects,
+      allCompletedRecords,
+      dbSettings,
+      yesterdayRecord,
+      todaySessions,
+      openStrikesCount,
+      recentStrikes,
+      activeTimer
+    ] = await Promise.all([
+      Task.find().lean(),
+      Project.find().lean(),
+      DailyRecord.find({ status: 'completed' }).sort({ date: -1 }).lean(),
+      UserSettings.findOne().lean(),
+      DailyRecord.findOne({ date: yesterdayStr }).lean(),
+      TaskSession.find({ createdAt: { $gte: startOfToday } }).lean(),
+      Strike.countDocuments({ status: 'open' }),
+      Strike.find({ status: 'open' }).sort({ createdAt: -1 }).limit(10).lean(),
+      ActiveTimer.findOne().lean()
+    ]);
+
     const required = tasks.filter(t => t.commitmentLevel === 'required');
     const optional = tasks.filter(t => t.commitmentLevel !== 'required');
     const completedRequired = required.filter(t => t.status === 'completed').length;
     const completedOptional = optional.filter(t => t.status === 'completed').length;
     const totalRequired = required.length;
     
-    const allCompletedRecords = await DailyRecord.find({ status: 'completed' }).sort({ date: -1 });
     let currentStreak = 0;
     let expectedDate = new Date();
     expectedDate.setHours(0, 0, 0, 0);
@@ -361,18 +393,9 @@ router.get('/daily/today', async (req, res) => {
       expectedDate.setDate(expectedDate.getDate() - 1);
     }
 
-    let settings = await UserSettings.findOne();
-    if (!settings) {
-      settings = { userName: 'Commander', timezone: 'UTC' };
-    }
+    const settings = dbSettings || { userName: 'Commander', timezone: 'UTC' };
 
-    // Get yesterday's record
-    const yesterday = new Date(startOfToday);
-    yesterday.setDate(yesterday.getDate() - 1);
-    const yesterdayStr = yesterday.toISOString().split('T')[0];
-    const yesterdayRecord = await DailyRecord.findOne({ date: yesterdayStr });
     let yesterdayData = null;
-    
     if (yesterdayRecord) {
       const completedYesterdayIds = yesterdayRecord.completedTaskIds || [];
       const missedYesterdayIds = yesterdayRecord.missedTaskIds || [];
@@ -392,18 +415,12 @@ router.get('/daily/today', async (req, res) => {
       };
     }
 
-    const todaySessions = await TaskSession.find({
-      createdAt: { $gte: startOfToday }
-    });
     const totalTrackedMinutesToday = todaySessions.reduce((sum, s) => sum + (s.durationMinutes || 0), 0);
-
-    const openStrikesCount = await Strike.countDocuments({ status: 'open' });
-    const recentStrikes = await Strike.find().sort({ createdAt: -1 }).limit(10);
 
     res.json({
       success: true,
       data: {
-        date: new Date().toISOString().split('T')[0],
+        date: todayStr,
         formattedDate: new Date().toDateString(),
         user: { name: settings.userName, timezone: settings.timezone },
         summary: { 
@@ -419,9 +436,12 @@ router.get('/daily/today', async (req, res) => {
         },
         requiredTasks: required,
         optionalTasks: optional,
-        activeTimer: await ActiveTimer.findOne(),
+        activeTimer,
         yesterday: yesterdayData,
-        projectContexts: projects.map(p => ({ project: p, pendingTasks: tasks.filter(t => t.projectId === p._id.toString() && t.status !== 'completed') })),
+        projectContexts: projects.map(p => ({ 
+          project: p, 
+          pendingTasks: tasks.filter(t => t.projectId === p._id.toString() && t.status !== 'completed') 
+        })),
         recentStrikes,
         noProgressToday: false
       }

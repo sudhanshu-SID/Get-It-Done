@@ -34,6 +34,9 @@ async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
 }
 
 export const apiService = {
+  // Health / Keep-Alive Ping
+  ping: () => fetchJson<{ status: string }>('/api/health'),
+
   // Today & Daily
   getToday: () => fetchJson<TodayDashboardData>('/api/daily/today'),
   getTodayDashboard: () => fetchJson<TodayDashboardData>('/api/daily/today'),
