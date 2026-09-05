@@ -397,6 +397,9 @@ router.get('/daily/today', async (req, res) => {
     });
     const totalTrackedMinutesToday = todaySessions.reduce((sum, s) => sum + (s.durationMinutes || 0), 0);
 
+    const openStrikesCount = await Strike.countDocuments({ status: 'open' });
+    const recentStrikes = await Strike.find().sort({ createdAt: -1 }).limit(10);
+
     res.json({
       success: true,
       data: {
@@ -411,7 +414,7 @@ router.get('/daily/today', async (req, res) => {
           completedOptional, 
           completionRate: totalRequired ? Math.round((completedRequired / totalRequired)*100) : 100, 
           totalTrackedMinutesToday, 
-          currentStrikes: 0, 
+          currentStrikes: openStrikesCount, 
           currentStreak
         },
         requiredTasks: required,
@@ -419,7 +422,7 @@ router.get('/daily/today', async (req, res) => {
         activeTimer: await ActiveTimer.findOne(),
         yesterday: yesterdayData,
         projectContexts: projects.map(p => ({ project: p, pendingTasks: tasks.filter(t => t.projectId === p._id.toString() && t.status !== 'completed') })),
-        recentStrikes: [],
+        recentStrikes,
         noProgressToday: false
       }
     });

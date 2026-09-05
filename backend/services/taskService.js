@@ -83,8 +83,9 @@ class TaskService {
   async handleTaskCompletion(task) {
     checkDB();
     const today = startOfDay(new Date());
+    const todayStr = format(today, 'yyyy-MM-dd');
     const dailyRecord = await DailyRecord.findOneAndUpdate(
-      { date: today },
+      { date: todayStr },
       {
         $addToSet: { completedTaskIds: task._id },
         $pull: { requiredTaskIds: task._id, missedTaskIds: task._id },
