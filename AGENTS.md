@@ -18,3 +18,9 @@ Single-context repository. See `docs/agents/domain.md`.
 - Keep commit messages concise, descriptive, and written in standard developer voice.
 - Never add AI signatures, bot tags, or `Co-authored-by:` bot trailers to commit messages.
 - Maintain consistent commit styling so the git log reads as a single individual developer.
+
+### Collaborative Development & Edge Case Protocol
+
+- Before modifying code or running mutating commands, always discuss the proposed plan and explain what needs to be changed and why.
+- Explicitly list and highlight potential edge cases upfront (e.g. data desync, race conditions, partial failures, cascading deletes, user typos, backwards compatibility) to build shared intuition.
+- Wait for user alignment on the approach before touching any code.
