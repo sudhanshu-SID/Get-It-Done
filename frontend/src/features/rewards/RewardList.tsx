@@ -1,9 +1,10 @@
 import React from 'react';
 import { Gift, Plus, CheckCircle2, Lock, Unlock, PartyPopper, Trash2 } from 'lucide-react';
-import { Reward } from '../../types/index';
+import { Reward, Goal } from '../../types/index';
 
 interface RewardListProps {
   rewards: Reward[];
+  goals?: Goal[];
   onOpenRewardModal: (reward?: Reward) => void;
   onRedeemReward: (id: string) => Promise<void>;
   onDeleteReward: (id: string) => Promise<void>;
@@ -11,6 +12,7 @@ interface RewardListProps {
 
 export const RewardList: React.FC<RewardListProps> = ({
   rewards,
+  goals = [],
   onOpenRewardModal,
   onRedeemReward,
   onDeleteReward
@@ -112,7 +114,9 @@ export const RewardList: React.FC<RewardListProps> = ({
 
                 <div className="pt-3 border-t-2 border-[#141414] flex items-center justify-between">
                   <span className="text-[10px] font-mono opacity-60">
-                    {reward.linkedGoalTitle ? `GOAL: ${reward.linkedGoalTitle}` : 'INDEPENDENT'}
+                    {reward.linkedGoalTitle || goals.find(g => g._id === reward.linkedGoalId)?.title
+                      ? `GOAL: ${reward.linkedGoalTitle || goals.find(g => g._id === reward.linkedGoalId)?.title}`
+                      : 'INDEPENDENT'}
                   </span>
 
                   {isUnlocked && (

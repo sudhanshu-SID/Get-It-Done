@@ -81,7 +81,7 @@ export interface Project {
   updatedAt: string;
 }
 
-export type GoalType = 'task_count' | 'time_spent' | 'streak' | 'completion_rate' | 'custom';
+export type GoalType = 'task_count' | 'metric_count' | 'time_spent' | 'streak' | 'completion_rate' | 'custom';
 export type GoalStatus = 'active' | 'achieved' | 'missed';
 
 export interface Goal {

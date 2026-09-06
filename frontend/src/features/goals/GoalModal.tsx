@@ -61,7 +61,8 @@ export const GoalModal: React.FC<GoalModalProps> = ({
 
   const handleTypeChange = (newType: GoalType) => {
     setType(newType);
-    if (newType === 'task_count') setUnit('problems/tasks');
+    if (newType === 'task_count') setUnit('tasks');
+    else if (newType === 'metric_count') setUnit('problems');
     else if (newType === 'time_spent') setUnit('hours');
     else if (newType === 'streak') setUnit('days');
     else if (newType === 'completion_rate') setUnit('%');
@@ -135,7 +136,8 @@ export const GoalModal: React.FC<GoalModalProps> = ({
                 onChange={e => handleTypeChange(e.target.value as GoalType)}
                 className="mt-1 w-full border border-[#141414] bg-white px-3 py-1.5 text-xs font-mono uppercase font-bold text-[#141414] focus:outline-none cursor-pointer"
               >
-                <option value="task_count">Task / Problem Count</option>
+                <option value="task_count">Task Count (Completed Tasks)</option>
+                <option value="metric_count">Problem / Question Count (e.g. DSA)</option>
                 <option value="time_spent">Time Spent (Hours)</option>
                 <option value="streak">Daily Streak (Days)</option>
                 <option value="completion_rate">Completion Rate (%)</option>

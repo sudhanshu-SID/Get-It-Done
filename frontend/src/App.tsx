@@ -672,6 +672,7 @@ export default function App() {
         {activeTab === 'rewards' && (
           <RewardList
             rewards={rewards}
+            goals={goals}
             onOpenRewardModal={reward => {
               setSelectedRewardForEdit(reward || null);
               setIsRewardModalOpen(true);

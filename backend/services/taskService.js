@@ -137,14 +137,16 @@ class TaskService {
     });
     
     for (const goal of goals) {
-      if (goal.targetType === 'task_count') {
-        goal.currentValue = goal.relatedTasks.length > 0
-          ? await Task.countDocuments({ _id: { $in: goal.relatedTasks }, status: 'completed' })
-          : await Task.countDocuments({ projectId: goal.relatedProjects[0], status: 'completed' });
+      if (goal.type === 'task_count' || goal.targetType === 'task_count') {
+        const relTasks = goal.relatedTasks || [];
+        const relProjects = goal.relatedProjects || [];
+        goal.currentValue = relTasks.length > 0
+          ? await Task.countDocuments({ _id: { $in: relTasks }, status: 'completed' })
+          : (relProjects.length > 0 ? await Task.countDocuments({ projectId: relProjects[0], status: 'completed' }) : goal.currentValue);
       }
       
       if (goal.currentValue >= goal.targetValue) {
-        goal.status = 'completed';
+        goal.status = 'achieved';
         goal.completedAt = new Date();
       }
       

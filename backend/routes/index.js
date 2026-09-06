@@ -37,8 +37,64 @@ const makeCrud = (model, path) => {
 
 makeCrud(Task, '/tasks');
 makeCrud(Project, '/projects');
+
+router.patch('/goals/:id', async (req, res) => {
+  try {
+    const goal = await Goal.findByIdAndUpdate(req.params.id, req.body, { returnDocument: 'after' });
+    if (goal) {
+      if (req.body.title) {
+        await Reward.updateMany(
+          { linkedGoalId: goal._id.toString() },
+          { $set: { linkedGoalTitle: goal.title } }
+        );
+      }
+      if (goal.currentValue >= goal.targetValue || goal.status === 'achieved' || goal.status === 'completed') {
+        if (goal.status === 'active') {
+          goal.status = 'achieved';
+          await goal.save();
+        }
+        await Reward.updateMany(
+          { linkedGoalId: goal._id.toString(), status: 'locked' },
+          { $set: { status: 'unlocked', unlockedAt: new Date().toISOString() } }
+        );
+      } else if (goal.currentValue < goal.targetValue && (goal.status === 'achieved' || goal.status === 'completed')) {
+        goal.status = 'active';
+        await goal.save();
+        await Reward.updateMany(
+          { linkedGoalId: goal._id.toString(), status: { $in: ['unlocked', 'redeemed'] } },
+          { $set: { status: 'locked', unlockedAt: null, redeemedAt: null } }
+        );
+      }
+    }
+    res.json({ success: true, data: goal });
+  } catch(e) { res.status(500).json({ success: false, message: e.message }); }
+});
+
+router.delete('/goals/:id', async (req, res) => {
+  try {
+    await Reward.updateMany(
+      { linkedGoalId: req.params.id },
+      { $unset: { linkedGoalId: 1, linkedGoalTitle: 1 } }
+    );
+    await Goal.findByIdAndDelete(req.params.id);
+    res.json({ success: true, data: { message: 'Deleted' } });
+  } catch(e) { res.status(500).json({ success: false, message: e.message }); }
+});
+
 makeCrud(Goal, '/goals');
 makeCrud(Reward, '/rewards');
+
+router.post('/rewards/:id/redeem', async (req, res) => {
+  try {
+    const reward = await Reward.findByIdAndUpdate(
+      req.params.id,
+      { status: 'redeemed', redeemedAt: new Date().toISOString() },
+      { returnDocument: 'after' }
+    );
+    if (!reward) return res.status(404).json({ success: false, message: 'Reward not found' });
+    res.json({ success: true, data: reward });
+  } catch(e) { res.status(500).json({ success: false, message: e.message }); }
+});
 // Consequence Routes
 router.get('/consequences', async (req, res) => {
   try { res.json({ success: true, data: await Consequence.find().sort({ createdAt: -1 }) }); }
@@ -121,7 +177,7 @@ router.post('/tasks/:id/complete', async (req, res) => {
     if (task) {
       const goals = await Goal.find({ status: 'active', category: task.category });
       for (const goal of goals) {
-        if (goal.type === 'metric_count' && task.questionsSolved) {
+        if (task.questionsSolved && (goal.type === 'metric_count' || goal.type === 'task_count')) {
           goal.currentValue += task.questionsSolved;
         } else if (goal.type === 'task_count') {
           goal.currentValue += 1;
@@ -168,17 +224,17 @@ router.post('/tasks/:id/uncomplete', async (req, res) => {
     // Reverse goal progress
     const goals = await Goal.find({ 
       category: task.category,
-      type: 'task_count',
-      status: { $in: ['active', 'achieved'] }
+      type: { $in: ['task_count', 'metric_count'] },
+      status: { $in: ['active', 'achieved', 'completed'] }
     });
     
     for (const goal of goals) {
-      if (task.category === 'DSA' && task.questionsSolved) {
+      if (task.questionsSolved && (goal.type === 'metric_count' || goal.type === 'task_count')) {
         goal.currentValue = Math.max(0, goal.currentValue - task.questionsSolved);
-      } else {
+      } else if (goal.type === 'task_count') {
         goal.currentValue = Math.max(0, goal.currentValue - 1);
       }
-      if (goal.currentValue < goal.targetValue && goal.status === 'achieved') {
+      if (goal.currentValue < goal.targetValue && (goal.status === 'achieved' || goal.status === 'completed')) {
         goal.status = 'active';
         await Reward.updateMany(
           { linkedGoalId: goal._id.toString(), status: { $in: ['unlocked', 'redeemed'] } },
@@ -326,7 +382,8 @@ router.get('/daily/today', async (req, res) => {
             status: 'todo',
             scheduledDate: todayStr,
             actualMinutes: 0,
-            completedAt: null
+            completedAt: null,
+            questionsSolved: 0
           }
         }
       );
@@ -565,6 +622,14 @@ router.get('/analytics', async (req, res) => {
       actualMinutes: t.actualMinutes || 0,
       differenceMinutes: (t.actualMinutes || 0) - (t.estimatedMinutes || 0)
     }));
+
+    // DSA speed & problem telemetry
+    const dsaGoal = await Goal.findOne({ category: 'DSA' });
+    const dsaTasks = tasks.filter(t => t.category === 'DSA');
+    const dsaCompleted = dsaTasks.filter(t => t.status === 'completed');
+    const dsaProblemsCount = dsaGoal ? dsaGoal.currentValue : dsaCompleted.reduce((sum, t) => sum + (t.questionsSolved || 1), 0);
+    const dsaTotalMinutes = timeByCategory['DSA'] || 0;
+    const dsaAvgMinutes = dsaProblemsCount > 0 ? Math.round(dsaTotalMinutes / dsaProblemsCount) : 0;
     
     res.json({ 
       success: true, 
@@ -579,6 +644,11 @@ router.get('/analytics', async (req, res) => {
         timeByProject: timeByProjectArray, 
         dailyWorkHistory: last7Days, 
         estimatedVsActual: estimatedVsActual,
+        dsaAnalytics: {
+          problemsCompleted: dsaProblemsCount,
+          totalMinutes: dsaTotalMinutes,
+          avgMinutesPerProblem: dsaAvgMinutes
+        },
         strikeHistory: {total:0, open:0, resolved:0, byMonth:[]} 
       }
     });

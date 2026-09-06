@@ -61,29 +61,48 @@ class GoalService {
     
     let currentValue = 0;
     
-    switch (goal.targetType) {
+    const goalType = goal.type || goal.targetType;
+    const relatedTasks = goal.relatedTasks || [];
+    const relatedProjects = goal.relatedProjects || [];
+    
+    switch (goalType) {
       case 'task_count':
-        if (goal.relatedTasks.length > 0) {
+        if (relatedTasks.length > 0) {
           currentValue = await Task.countDocuments({
-            _id: { $in: goal.relatedTasks },
+            _id: { $in: relatedTasks },
             status: 'completed',
           });
-        } else if (goal.relatedProjects.length > 0) {
+        } else if (relatedProjects.length > 0) {
           currentValue = await Task.countDocuments({
-            projectId: { $in: goal.relatedProjects },
+            projectId: { $in: relatedProjects },
+            status: 'completed',
+          });
+        } else if (goal.category) {
+          currentValue = await Task.countDocuments({
+            category: goal.category,
             status: 'completed',
           });
         }
         break;
         
+      case 'metric_count':
+        if (goal.category) {
+          const compTasks = await Task.find({
+            category: goal.category,
+            status: 'completed',
+          });
+          currentValue = compTasks.reduce((sum, t) => sum + (t.questionsSolved || 0), 0);
+        }
+        break;
+        
       case 'time_spent':
-        if (goal.relatedTasks.length > 0) {
+        if (relatedTasks.length > 0) {
           const sessions = await TaskSession.find({
-            taskId: { $in: goal.relatedTasks },
+            taskId: { $in: relatedTasks },
           });
           currentValue = Math.floor(sessions.reduce((sum, s) => sum + s.durationSeconds, 0) / 60);
-        } else if (goal.relatedProjects.length > 0) {
-          const tasks = await Task.find({ projectId: { $in: goal.relatedProjects } });
+        } else if (relatedProjects.length > 0) {
+          const tasks = await Task.find({ projectId: { $in: relatedProjects } });
           const sessions = await TaskSession.find({
             taskId: { $in: tasks.map(t => t._id) },
           });
@@ -106,13 +125,13 @@ class GoalService {
     goal.currentValue = currentValue;
     
     if (currentValue >= goal.targetValue && goal.status === 'active') {
-      goal.status = 'completed';
+      goal.status = 'achieved';
       goal.completedAt = new Date();
     }
     
     await goal.save();
     
-    if (goal.status === 'completed') {
+    if (goal.status === 'achieved' || goal.status === 'completed') {
       await this.checkAndUnlockRewards(goal);
     }
     

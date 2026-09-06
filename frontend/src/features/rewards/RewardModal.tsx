@@ -51,11 +51,13 @@ export const RewardModal: React.FC<RewardModalProps> = ({
 
     setIsSubmitting(true);
     try {
+      const selectedGoal = goals.find(g => g._id === linkedGoalId);
       await onSave({
         title: title.trim(),
         description: description.trim(),
         requirement: requirement.trim(),
         linkedGoalId: linkedGoalId || undefined,
+        linkedGoalTitle: selectedGoal ? selectedGoal.title : undefined,
         value: value.trim() || 'Reward',
         status
       });

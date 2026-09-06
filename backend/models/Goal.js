@@ -10,7 +10,10 @@ const GoalSchema = new mongoose.Schema({
   category: String,
   startDate: String,
   endDate: String,
-  status: { type: String, enum: ['active', 'achieved', 'missed'], default: 'active' }
+  relatedTasks: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Task' }],
+  relatedProjects: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Project' }],
+  completedAt: Date,
+  status: { type: String, enum: ['active', 'achieved', 'completed', 'missed'], default: 'active' }
 }, { timestamps: true });
 
 module.exports = mongoose.model('Goal', GoalSchema);
