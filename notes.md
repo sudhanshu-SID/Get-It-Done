@@ -62,6 +62,7 @@ The application follows a standard **Client-Server RESTful Architecture**:
   - `Strike.js`: Schema for accountability infractions (date, reason, taskId, status: `'active'` | `'resolved'`, resolution notes).
   - `Consequence.js`: Schema for strike threshold penalties (title, description, threshold e.g. 10 strikes, durationDays, status: `'pending'` | `'active'` | `'completed'`, `startDate`, `endDate`, `autoResolveStrikes`, `strikesResolvedCount`).
   - `ActiveTimer.js`: Singleton document tracking currently running focus session (`taskId`, `taskTitle`, `startTime`, `accumulatedSeconds`, `status`: `'running'` | `'paused'`).
+  - `Gamification.js`: Tracks user game mechanics, current active strikes, monetary penalties owed, and `longestStreak` all-time personal best.
 - **Services (`backend/services/`)**
   - `dailyService.js`: Daily rollover, analytics, retroactive miss evaluation, and daily summary computation.
   - `strikeService.js`: Strike issuance logic, active strike count aggregation, and automatic consequence trigger checks when thresholds are crossed.
@@ -69,10 +70,11 @@ The application follows a standard **Client-Server RESTful Architecture**:
   - `sessionService.js`: Handles session logs, converting elapsed seconds to worked minutes and updating task metrics.
 - **Frontend Components (`frontend/src/features/`)**
   - `TodayDashboard.tsx`: Primary dashboard combining mandatory commitments, active timer banner, live penalty ticker, and daily note.
+  - `AnalyticsDashboard.tsx`: Weekly retrospective cockpit featuring 7/14/30-day window telemetry, "Where You Excelled" vs "Where You Lagged", category discipline matrix, and estimation calibration.
   - `StrikeList.tsx`: Chronologically grouped strike viewer (Today, Yesterday, Date headers) with search and status filtering (`All`, `Active`, `Resolved`).
   - `ActivePenaltyBanner.tsx`: Global high-visibility banner featuring real-time second-by-second countdown (`XXd XXh XXm XXs`), progress bar, and one-click strike settlement.
   - `ConsequenceModal.tsx`: Form modal to customize strike thresholds, penalty actions, duration presets (1d, 3d, 7d, 14d, 30d), and automated debt clearance toggles.
-  - `Navbar.tsx`: Global navigation bar with active session indicator, live elapsed focus timer, and clock.
+  - `Navbar.tsx`: Global navigation bar with dynamic backend sleep/operational indicator, luminous glowing streak badge, live elapsed focus timer, and clock.
 
 ---
 
@@ -124,6 +126,28 @@ If an interviewer asks about complex problems solved in this app, bring up these
 1. **On-Demand Tab Hydration:** On initial load, the client only fetches the immediate viewport (Today Dashboard + Active Timer + Settings). Secondary tabs (Analytics, Goals, Rewards, Backlog) are hydrated on-demand only when selected.
 2. **Rollover Caching:** The backend daily rollover (`evaluatePastDays(7)`) only runs once per calendar day. Subsequent requests to `/api/daily/today` skip redundant date checks.
 3. **Database Concurrency & Lean Documents:** Independent dashboard queries run concurrently via `Promise.all` using `.lean()`, cutting response latency by ~70%.
+
+### Problem 7: Data-Driven Retrospective Cockpit & Free-Tier DB Protection
+**Challenge:** Users need actionable visibility into where they lagged, excelled, and misestimated time across multi-week cycles, but querying unbounded historical timelines on free-tier MongoDB Atlas clusters causes RAM exhaustion and sluggish aggregations.  
+**Solution:** **Bounded Multi-Period Windows (7/14/30 Days) with Mathematical Calibration**.
+1. **Hard Query Bounds:** Telemetry is strictly capped at `7d`, `14d`, and `30d` windows. Unbounded "All-Time" full table scans are prohibited, guaranteeing minimal database memory footprint.
+2. **True Commitment Adherence vs Optional Tasks:** Incomplete tasks moved by midnight evaluations to `missedTaskIds` are unioned with `requiredTaskIds` to compute true non-negotiable discipline rates ($\frac{\text{Completed Required}}{\text{Planned Required}}$) rather than naive total task counts.
+3. **Category Discipline Matrix:** Color-codes field health (`EXCELLING` = Emerald, `ON TRACK` = Indigo, `NEEDS FOCUS` = Amber) based on category-specific commitment fulfillment rather than raw time alone.
+4. **Estimation Variance Calibration:** Excludes auto-generated zero-estimate project work sessions to eliminate false positive estimation drift.
+
+### Problem 8: Deterministic Streak Engine with Rest-Day Continuity & Best Streak Tracking
+**Challenge:** Naive streak implementations either count any day with an app visit (meaningless vanity metric) or penalize users when they take planned rest days, causing demotivation and abandonment.  
+**Solution:** **Strict 100% Adherence Rule with Break-Day Pauses and Historical Best Persistence**.
+1. **Strict Adherence:** A day only counts toward an active streak if 100% of mandatory daily commitments were completed. Any missed required task resets active streak to `0`.
+2. **Rest-Day Freeze ("I Did Nothing Today"):** When a user triggers "I did nothing today" (`status: 'no_progress'`), the streak engine pauses progression. The streak neither increases nor decreases, preserving continuity across intentional rest without penalty.
+3. **Immutable Best-Streak Preservation:** The backend evaluates chronological daily records to determine all-time peak consecutive days and permanently persists `longestStreak` in MongoDB `Gamification`, ensuring personal records survive future streak breaks.
+
+### Problem 9: Sleep-Aware Backend System Status with Zero-Waste Quota Policy
+**Challenge:** Free cloud hosts (Render) put idle instances to sleep after 15 minutes. Users often don't know whether the backend is online or sleeping, but setting up a continuous 24/7 pinger quickly burns through the 750 free monthly compute hours.  
+**Solution:** **Event-Driven Connection Interception with One-Click Wakeup**.
+1. **Passive Interception:** Frontend network adapters intercept fetch calls. When a network error, timeout, or 502 occurs, the UI immediately flips to `○ Standby / Sleeping`. Any `HTTP 200` response instantly flips it to `● Operational`.
+2. **One-Click Handshake:** When in standby, the System Status pill in the Navbar becomes an interactive trigger. Clicking it fires a 4-second probe to `/api/health` to spin up the instance and re-hydrates the application without requiring a full browser reload.
+3. **Timer Keep-Alive Harmony:** When an active focus timer is ticking, the 9-minute heartbeat keeps the instance alive so work is never dropped mid-session, completely halting when the timer stops.
 
 ---
 

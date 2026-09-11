@@ -15,27 +15,76 @@ import {
   Note
 } from '../types/index';
 
+export type BackendStatus = 'operational' | 'sleeping' | 'checking';
+type BackendStatusListener = (status: BackendStatus) => void;
+let statusListeners: BackendStatusListener[] = [];
+
+export function onBackendStatusChange(listener: BackendStatusListener) {
+  statusListeners.push(listener);
+  return () => {
+    statusListeners = statusListeners.filter(l => l !== listener);
+  };
+}
+
+function notifyStatus(status: BackendStatus) {
+  statusListeners.forEach(l => l(status));
+}
+
 async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
   const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
   const fullUrl = url.startsWith("http") ? url : `${baseUrl}${url}`;
-  const res = await fetch(fullUrl, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...options?.headers
-    }
-  });
+  
+  try {
+    const res = await fetch(fullUrl, {
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        ...options?.headers
+      }
+    });
 
-  const json = await res.json();
-  if (!res.ok || json.success === false) {
-    throw new Error(json.message || json.error || `Request failed with status ${res.status}`);
+    const json = await res.json();
+    if (!res.ok || json.success === false) {
+      if (res.status >= 500) {
+        notifyStatus('sleeping');
+      }
+      throw new Error(json.message || json.error || `Request failed with status ${res.status}`);
+    }
+    notifyStatus('operational');
+    return json.data !== undefined ? json.data : json;
+  } catch (err: any) {
+    // If it's a network error or fetch failed completely (server down/sleeping)
+    if (err.name === 'TypeError' || err.message?.includes('fetch') || err.message?.includes('network')) {
+      notifyStatus('sleeping');
+    }
+    throw err;
   }
-  return json.data !== undefined ? json.data : json;
 }
 
 export const apiService = {
   // Health / Keep-Alive Ping
   ping: () => fetchJson<{ status: string }>('/api/health'),
+
+  checkHealth: async (): Promise<boolean> => {
+    notifyStatus('checking');
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 4000);
+      const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+      const res = await fetch(`${baseUrl}/api/health`, { signal: controller.signal });
+      clearTimeout(timeoutId);
+      if (res.ok) {
+        notifyStatus('operational');
+        return true;
+      } else {
+        notifyStatus('sleeping');
+        return false;
+      }
+    } catch {
+      notifyStatus('sleeping');
+      return false;
+    }
+  },
 
   // Today & Daily
   getToday: () => fetchJson<TodayDashboardData>('/api/daily/today'),
@@ -245,7 +294,10 @@ export const apiService = {
     }),
 
   // Analytics
-  getAnalytics: () => fetchJson<AnalyticsSummary>('/api/analytics'),
+  getAnalytics: (days?: number) => {
+    const qs = days ? `?days=${days}` : '';
+    return fetchJson<AnalyticsSummary>(`/api/analytics${qs}`);
+  },
 
   // Settings
   getSettings: () => fetchJson<UserSettings>('/api/settings'),

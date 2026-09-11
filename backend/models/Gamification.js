@@ -12,6 +12,10 @@ const GamificationSchema = new mongoose.Schema({
   monetaryPenaltyOwed: {
     type: Number,
     default: 0
+  },
+  longestStreak: {
+    type: Number,
+    default: 0
   }
 }, { timestamps: true });
 
