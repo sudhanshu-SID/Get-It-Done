@@ -30,7 +30,9 @@
 ## Phase 6: Testing & Validation (ACTIVE)
 - Dogfood the live PWA application for at least 1 week.
 - Validate daily task flow, strike mechanisms, analytics accuracy, and general UX.
-- Identify bugs before expanding architecture to multiple users.
+- **Weekly Retrospective Cockpit (COMPLETED):** Upgraded Analytics with 7/14/30-day bounded query telemetry, dual retrospective panels ("Where You Excelled" vs "Where You Lagged"), Category Discipline Matrix, and estimation calibration.
+- **Deterministic Streak Engine (COMPLETED):** Implemented strict 100% commitment adherence, break-day continuity ("I Did Nothing Today" `status: 'no_progress'`), and permanent persistence of all-time peak streaks in `Gamification.longestStreak`.
+- **Sleep-Aware System Status & Health Keep-Alive (COMPLETED):** Built event-driven connection monitoring (`Operational` vs `Standby`) with 1-click reconnect and targeted 9-minute timer heartbeat that prevents instance dropoffs while preserving free-tier quotas.
 
 ## Phase 7: Multi-User Authentication (PENDING)
 - Integrate an authentication provider (Clerk, Auth0, or Firebase Auth).

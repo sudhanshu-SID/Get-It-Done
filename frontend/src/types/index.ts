@@ -218,6 +218,7 @@ export interface TodayDashboardData {
     totalTrackedMinutesToday: number;
     currentStrikes: number;
     currentStreak: number;
+    longestStreak?: number;
   };
   requiredTasks: Task[];
   optionalTasks: Task[];
@@ -242,8 +243,27 @@ export interface TodayDashboardData {
   noProgressToday: boolean;
 }
 
+export interface CategoryBreakdownItem {
+  category: string;
+  minutes: number;
+  percentage: number;
+  totalTasks: number;
+  completedTasks: number;
+  completionRate: number;
+  requiredRate: number;
+  rescheduleCount: number;
+  health: 'excelling' | 'on_track' | 'needs_attention';
+}
+
+export interface RetrospectiveInsight {
+  title: string;
+  detail: string;
+  metric?: string;
+}
+
 export interface AnalyticsSummary {
-  period: 'today' | 'week' | 'month' | 'all';
+  period: string;
+  periodDays?: number;
   totalMinutes: number;
   totalTasksCompleted: number;
   totalTasksMissed: number;
@@ -251,12 +271,36 @@ export interface AnalyticsSummary {
   requiredCompletionRate: number;
   timeByCategory: Array<{ category: string; minutes: number; percentage: number }>;
   timeByProject: Array<{ projectId: string; projectName: string; minutes: number; percentage: number }>;
-  dailyWorkHistory: Array<{ date: string; day: string; minutes: number; requiredCount: number; completedCount: number }>;
+  dailyWorkHistory: Array<{
+    date: string;
+    day: string;
+    formattedDate?: string;
+    minutes: number;
+    requiredCount: number;
+    completedCount: number;
+    status?: DailyStatus;
+  }>;
+  categoryBreakdown?: CategoryBreakdownItem[];
+  performanceInsights?: {
+    strengths: RetrospectiveInsight[];
+    lags: RetrospectiveInsight[];
+    recommendations: string[];
+  };
+  estimationMetrics?: {
+    avgVarianceMinutes: number;
+    overEstimatedCount: number;
+    underEstimatedCount: number;
+    totalAnalyzed: number;
+  };
+  periodComparison?: {
+    prevTotalMinutes: number;
+    percentChange: number;
+  };
   dsaAnalytics?: {
     problemsCompleted: number;
     totalMinutes: number;
     avgMinutesPerProblem: number;
-    currentStreakDays: number;
+    currentStreakDays?: number;
   };
   estimatedVsActual: Array<{
     taskId: string;
@@ -270,8 +314,19 @@ export interface AnalyticsSummary {
     total: number;
     open: number;
     resolved: number;
-    byMonth: Array<{ month: string; count: number }>;
+    periodCount?: number;
+    byMonth?: Array<{ month: string; count: number }>;
+    recentPeriodStrikes?: Array<{
+      number: number;
+      reason: string;
+      date: string;
+      status: string;
+      taskTitle?: string;
+      severity?: string;
+    }>;
   };
+  currentStreak?: number;
+  longestStreak?: number;
 }
 
 export interface Note {

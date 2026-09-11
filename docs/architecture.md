@@ -12,24 +12,26 @@ The application uses a standard Client-Server model with a decoupled REST API.
 │
 ├── /frontend               # React UI (TypeScript)
 │   ├── /src
-│   │   ├── /components     # Reusable UI components
-│   │   ├── /features       # Domain-specific logic (tasks, goals, strikes)
-│   │   ├── /services       # Axios API clients
-│   │   └── /types          # TypeScript interfaces
+│   │   ├── /components     # Reusable UI components (Navbar, Modals)
+│   │   ├── /features       # Domain features (today, analytics, goals, strikes, rewards, projects)
+│   │   ├── /services       # Typed Fetch API clients & status listeners
+│   │   └── /types          # TypeScript interfaces & domain types
 │   └── vite.config.ts
 │
 ├── /backend                # Express API (JavaScript)
-│   ├── /models             # Mongoose schemas (Task, Gamification, StrikeLog)
-│   ├── /controllers        # Request handling logic
-│   ├── /routes             # Express routers
+│   ├── /models             # Mongoose schemas (Task, Gamification, DailyRecord, Strike, Consequence, ActiveTimer)
+│   ├── /services           # Domain services (dailyService, strikeService, goalService, etc.)
+│   ├── /routes             # Express routers (index.js, analytics, daily, timer)
 │   └── server.js
 │
 └── /docs                   # Project documentation
 ```
 
-## 3. Data Flow
-1. **User Interaction:** User interacts with a React component in the `/frontend/src/features` directory.
-2. **API Call:** The component dispatches a request using Axios via `/frontend/src/services/api.ts`.
-3. **Routing:** The request hits `/backend/server.js` and is routed via `/backend/routes/`.
-4. **Processing:** The Controller processes the request and interacts with MongoDB via Mongoose Models.
-5. **Response:** JSON data is returned to the frontend.
+## 3. Data Flow & Connection Lifecycle
+1. **User Interaction:** User interacts with a React component in `/frontend/src/features`.
+2. **API Dispatch & Interception:** The component dispatches a request via `/frontend/src/services/api.ts`. Fetch requests pass through an active status listener:
+   - Successful `HTTP 200` responses broadcast `● Operational`.
+   - Network timeouts, connection drops, or `502/503` responses broadcast `○ Standby / Sleeping`.
+3. **Timer-Bound Keep-Alive:** While an active stopwatch timer is running, the client sends a background keep-alive ping to `/api/health` every 9 minutes to prevent cloud instances (Render) from spinning down during focus sessions.
+4. **Routing & Concurrency:** Requests hit `/backend/routes/index.js`, executing concurrent `.lean()` queries with `Promise.all` across MongoDB Atlas collections.
+5. **Response & Optimistic Recovery:** JSON data is returned to the frontend. In case of unexpected server cold-starts, pending timer stops are preserved optimistically in `localStorage` until the server handshakes.

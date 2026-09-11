@@ -33,6 +33,9 @@ interface NavbarProps {
   activeTimer: ActiveTimer | null;
   currentStrikesCount: number;
   currentStreak: number;
+  longestStreak?: number;
+  backendStatus?: 'operational' | 'sleeping' | 'checking';
+  onRefreshBackend?: () => void;
   onOpenAgentInspector: () => void;
   onPauseTimer: () => void;
   onResumeTimer: () => void;
@@ -45,6 +48,9 @@ export const Navbar: React.FC<NavbarProps> = ({
   activeTimer,
   currentStrikesCount,
   currentStreak,
+  longestStreak,
+  backendStatus = 'operational',
+  onRefreshBackend,
   onOpenAgentInspector,
   onPauseTimer,
   onResumeTimer,
@@ -132,21 +138,55 @@ export const Navbar: React.FC<NavbarProps> = ({
         </div>
 
         {/* Telemetry Metrics */}
-        <div className="hidden lg:flex items-center gap-6 text-[10px] font-mono uppercase tracking-widest">
-          <div className="flex flex-col">
-            <span className="opacity-50">System Status</span>
-            <span className="text-green-600 font-bold flex items-center gap-1">
-              <span className="inline-block w-1.5 h-1.5 rounded-full bg-green-600 animate-pulse" />
-              ● Operational
-            </span>
-          </div>
+        <div className="hidden lg:flex items-center gap-5 text-[10px] font-mono uppercase tracking-widest">
+          {/* Dynamic Interactive System Status */}
+          <button
+            onClick={onRefreshBackend}
+            title={
+              backendStatus === 'operational'
+                ? 'Backend is online & operational. Click to test connection.'
+                : backendStatus === 'checking'
+                ? 'Connecting to backend...'
+                : 'Backend is sleeping/unreachable. Click to wake up & refresh.'
+            }
+            className="flex flex-col text-left group cursor-pointer hover:opacity-85 transition-opacity"
+          >
+            <span className="opacity-50 text-[10px]">System Status</span>
+            {backendStatus === 'operational' ? (
+              <span className="text-emerald-700 font-bold flex items-center gap-1.5">
+                <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                ● Operational
+              </span>
+            ) : backendStatus === 'checking' ? (
+              <span className="text-blue-700 font-bold flex items-center gap-1.5">
+                <span className="inline-block w-2 h-2 rounded-full bg-blue-500 animate-spin" />
+                ◌ Connecting...
+              </span>
+            ) : (
+              <span className="text-amber-800 font-bold flex items-center gap-1.5 bg-amber-100 px-1 py-0.5 border border-amber-400">
+                <span className="inline-block w-2 h-2 rounded-full bg-amber-500" />
+                ○ Standby (Click to wake)
+              </span>
+            )}
+          </button>
 
+          {/* Streak Section */}
           <div className="flex flex-col border-l border-black/20 pl-4">
-            <span className="opacity-50">Streak Vector</span>
-            <span className="font-bold flex items-center gap-1 text-[#141414]">
-              <Flame className="h-3 w-3 text-orange-600" />
-              {currentStreak}d ACTIVE
-            </span>
+            <span className="opacity-50 text-[10px]">Streak</span>
+            <div className="flex items-center gap-1.5">
+              <Flame className="h-4 w-4 text-orange-500 fill-orange-400 drop-shadow-[0_0_8px_rgba(249,115,22,0.85)] animate-pulse" />
+              <div className="flex items-baseline gap-1.5 font-mono">
+                <span className="text-xs font-black text-orange-600 tracking-tight">
+                  {currentStreak}d
+                </span>
+                <span className="text-[10px] font-bold text-[#141414]">
+                  ACTIVE
+                </span>
+                <span className="text-[9px] font-mono text-neutral-500 font-bold ml-0.5">
+                  (BEST: {longestStreak ?? currentStreak}d)
+                </span>
+              </div>
+            </div>
           </div>
 
           <div className="flex flex-col border-l border-black/20 pl-4 text-right">

@@ -36,7 +36,7 @@ import {
   ActiveTimer,
   AnalyticsSummary
 } from './types/index';
-import { apiService } from './services/api';
+import { apiService, onBackendStatusChange, BackendStatus } from './services/api';
 
 export default function App() {
   // Navigation State
@@ -53,6 +53,7 @@ export default function App() {
   const [analytics, setAnalytics] = useState<AnalyticsSummary | null>(null);
   const [settings, setSettings] = useState<UserSettings | null>(null);
   const [activeTimer, setActiveTimer] = useState<ActiveTimer | null>(null);
+  const [backendStatus, setBackendStatus] = useState<BackendStatus>('operational');
 
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -245,6 +246,27 @@ export default function App() {
 
     return () => clearInterval(interval);
   }, [activeTimer?.status]);
+
+  // Subscribe to live backend connectivity / sleep state
+  useEffect(() => {
+    const unsubscribe = onBackendStatusChange(status => {
+      setBackendStatus(status);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // Manual wake-up & refresh trigger for sleeping/standby backend
+  const handleRefreshBackend = useCallback(async () => {
+    setBackendStatus('checking');
+    try {
+      const isAlive = await apiService.checkHealth();
+      if (isAlive) {
+        await refreshAllData();
+      }
+    } catch (err) {
+      console.warn('Backend wake-up failed:', err);
+    }
+  }, [refreshAllData]);
 
   // Live Timer Interval (Calculates elapsed seconds live in UI)
   useEffect(() => {
@@ -557,7 +579,10 @@ export default function App() {
         onResumeTimer={handleResumeTimer}
         onStopTimer={handleStopTimer}
         currentStrikesCount={todayData?.summary.currentStrikes || strikes.filter(s => s.status === 'open').length}
-        currentStreak={analytics?.currentStreak || 0}
+        currentStreak={todayData?.summary?.currentStreak ?? analytics?.currentStreak ?? 0}
+        longestStreak={todayData?.summary?.longestStreak ?? analytics?.longestStreak ?? 0}
+        backendStatus={backendStatus}
+        onRefreshBackend={handleRefreshBackend}
         onOpenAgentInspector={() => setIsAgentInspectorOpen(true)}
       />
 

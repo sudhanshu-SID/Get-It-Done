@@ -10,7 +10,104 @@ const ActiveTimer = require('../models/ActiveTimer');
 const TaskSession = require('../models/TaskSession');
 const UserSettings = require('../models/UserSettings');
 const DailyRecord = require('../models/DailyRecord');
+const Gamification = require('../models/Gamification');
 const dailyService = require('../services/dailyService');
+
+function computeStreakMetrics(allRecords, todaySummary, todayRecord, storedLongest = 0) {
+  const recordMap = new Map();
+  for (const r of allRecords) {
+    if (r.date) recordMap.set(r.date, r);
+  }
+
+  const todayStr = todayRecord?.date || new Date().toISOString().split('T')[0];
+  const [y, m, d] = todayStr.split('-').map(Number);
+  const cur = new Date(Date.UTC(y, m - 1, d));
+  cur.setUTCDate(cur.getUTCDate() - 1);
+
+  // 1. Calculate active consecutive streak walking backwards from yesterday
+  let streakCount = 0;
+  for (let i = 0; i < 365; i++) {
+    const dateStr = cur.toISOString().split('T')[0];
+    const rec = recordMap.get(dateStr);
+    if (!rec) {
+      // Unrecorded past day -> streak broke
+      break;
+    }
+
+    if (rec.status === 'no_progress') {
+      // Rest day / "I did nothing today": streak paused, neither increases nor decreases
+      cur.setUTCDate(cur.getUTCDate() - 1);
+      continue;
+    }
+
+    const hasReq = (rec.requiredTaskIds?.length || 0) + (rec.missedTaskIds?.length || 0) > 0;
+    const isCompleted = rec.status === 'completed' || (
+      hasReq &&
+      (rec.completedTaskIds?.length || 0) >= (rec.requiredTaskIds?.length || 0) &&
+      (rec.missedTaskIds?.length || 0) === 0
+    );
+
+    if (isCompleted) {
+      streakCount++;
+    } else {
+      // Incomplete required tasks -> streak broken
+      break;
+    }
+
+    cur.setUTCDate(cur.getUTCDate() - 1);
+  }
+
+  // Today's contribution:
+  const todayAllCompleted = (todaySummary?.totalRequired || 0) > 0 &&
+    (todaySummary?.completedRequired || 0) >= (todaySummary?.totalRequired || 0);
+  const todayIsRest = todayRecord?.status === 'no_progress';
+
+  let currentStreak = streakCount;
+  if (todayAllCompleted) {
+    currentStreak = streakCount + 1;
+  } else if (todayIsRest) {
+    currentStreak = streakCount;
+  } else {
+    // Today is in-progress: keep active streak from yesterday
+    currentStreak = streakCount;
+  }
+
+  // 2. Compute historical longest streak
+  let maxStreak = storedLongest || 0;
+  let runningStreak = 0;
+
+  const sorted = [...allRecords].sort((a, b) => String(a.date || '').localeCompare(String(b.date || '')));
+  for (const rec of sorted) {
+    if (String(rec.date || '') === todayStr) continue; // Skip today because today is dynamically evaluated above
+    if (rec.status === 'no_progress') {
+      // Rest day: streak paused, don't reset runningStreak, don't increment
+      continue;
+    }
+
+    const hasReq = (rec.requiredTaskIds?.length || 0) + (rec.missedTaskIds?.length || 0) > 0;
+    const isComp = rec.status === 'completed' || (
+      hasReq &&
+      (rec.completedTaskIds?.length || 0) >= (rec.requiredTaskIds?.length || 0) &&
+      (rec.missedTaskIds?.length || 0) === 0
+    );
+
+    if (isComp) {
+      runningStreak++;
+      if (runningStreak > maxStreak) {
+        maxStreak = runningStreak;
+      }
+    } else {
+      runningStreak = 0;
+    }
+  }
+
+  maxStreak = Math.max(maxStreak, currentStreak);
+
+  return {
+    currentStreak,
+    longestStreak: maxStreak
+  };
+}
 
 const makeCrud = (model, path) => {
   router.get(path, async (req, res) => {
@@ -411,23 +508,27 @@ router.get('/daily/today', async (req, res) => {
     const [
       tasks,
       projects,
-      allCompletedRecords,
+      allDailyRecords,
       dbSettings,
       yesterdayRecord,
+      todayRecord,
       todaySessions,
       openStrikesCount,
       recentStrikes,
-      activeTimer
+      activeTimer,
+      gamification
     ] = await Promise.all([
       Task.find().lean(),
       Project.find().lean(),
-      DailyRecord.find({ status: 'completed' }).sort({ date: -1 }).lean(),
+      DailyRecord.find().lean(),
       UserSettings.findOne().lean(),
       DailyRecord.findOne({ date: yesterdayStr }).lean(),
+      DailyRecord.findOne({ date: todayStr }).lean(),
       TaskSession.find({ createdAt: { $gte: startOfToday } }).lean(),
       Strike.countDocuments({ status: 'open' }),
       Strike.find({ status: 'open' }).sort({ createdAt: -1 }).limit(10).lean(),
-      ActiveTimer.findOne().lean()
+      ActiveTimer.findOne().lean(),
+      Gamification.findOne().lean()
     ]);
 
     const required = tasks.filter(t => t.commitmentLevel === 'required');
@@ -435,19 +536,20 @@ router.get('/daily/today', async (req, res) => {
     const completedRequired = required.filter(t => t.status === 'completed').length;
     const completedOptional = optional.filter(t => t.status === 'completed').length;
     const totalRequired = required.length;
-    
-    let currentStreak = 0;
-    let expectedDate = new Date();
-    expectedDate.setHours(0, 0, 0, 0);
-    for (let i = 0; i < 365; i++) {
-      const dateStr = expectedDate.toISOString().split('T')[0];
-      const record = allCompletedRecords.find(r => r.date === dateStr);
-      if (record) {
-        currentStreak++;
-      } else if (i !== 0) {
-        break;
-      }
-      expectedDate.setDate(expectedDate.getDate() - 1);
+
+    const streakMetrics = computeStreakMetrics(
+      allDailyRecords,
+      { totalRequired, completedRequired },
+      todayRecord,
+      gamification?.longestStreak || 0
+    );
+
+    if (streakMetrics.longestStreak > (gamification?.longestStreak || 0)) {
+      Gamification.findOneAndUpdate(
+        { userId: 'default_user' },
+        { $set: { longestStreak: streakMetrics.longestStreak } },
+        { upsert: true }
+      ).catch(e => console.error('Failed to update longestStreak:', e));
     }
 
     const settings = dbSettings || { userName: 'Commander', timezone: 'UTC' };
@@ -489,7 +591,8 @@ router.get('/daily/today', async (req, res) => {
           completionRate: totalRequired ? Math.round((completedRequired / totalRequired)*100) : 100, 
           totalTrackedMinutesToday, 
           currentStrikes: openStrikesCount, 
-          currentStreak
+          currentStreak: streakMetrics.currentStreak,
+          longestStreak: streakMetrics.longestStreak
         },
         requiredTasks: required,
         optionalTasks: optional,
@@ -506,7 +609,29 @@ router.get('/daily/today', async (req, res) => {
   } catch(e) { res.status(500).json({ success: false, message: e.message }); }
 });
 
-router.post('/daily/today/no-progress', (req, res) => res.json({ success: true, data: {} }));
+router.post('/daily/today/no-progress', async (req, res) => {
+  try {
+    const todayStr = new Date().toISOString().split('T')[0];
+    let record = await DailyRecord.findOne({ date: todayStr });
+    if (!record) {
+      record = await DailyRecord.create({
+        date: todayStr,
+        status: 'no_progress',
+        dailyNote: req.body?.note || 'Break / Rest Day',
+        requiredTaskIds: [],
+        completedTaskIds: [],
+        missedTaskIds: []
+      });
+    } else {
+      record.status = 'no_progress';
+      if (req.body?.note) record.dailyNote = req.body.note;
+      await record.save();
+    }
+    res.json({ success: true, data: record });
+  } catch(e) {
+    res.status(500).json({ success: false, message: e.message });
+  }
+});
 router.post('/daily/note', (req, res) => res.json({ success: true, data: {} }));
 router.get('/daily/yesterday', (req, res) => res.json({ success: true, data: null }));
 
@@ -538,118 +663,396 @@ router.patch('/settings', async (req, res) => {
 
 router.get('/analytics', async (req, res) => {
   try {
-    const tasks = await Task.find();
-    const sessions = await TaskSession.find({ isActive: false });
-    const dailyRecords = await DailyRecord.find();
-    
-    let totalMinutes = 0;
+    const daysParam = parseInt(req.query.days, 10);
+    const days = [7, 14, 30].includes(daysParam) ? daysParam : 7;
+
+    const formatLocalDate = (date) => {
+      const y = date.getFullYear();
+      const m = String(date.getMonth() + 1).padStart(2, '0');
+      const d = String(date.getDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    };
+
+    const now = new Date();
+    const startDate = new Date(now);
+    startDate.setDate(startDate.getDate() - (days - 1));
+    startDate.setHours(0, 0, 0, 0);
+    const startDateStr = formatLocalDate(startDate);
+
+    const prevStartDate = new Date(startDate);
+    prevStartDate.setDate(prevStartDate.getDate() - days);
+    const prevStartDateStr = formatLocalDate(prevStartDate);
+
+    const [tasks, allSessions, dailyRecords, strikes, goals, projects, gamification] = await Promise.all([
+      Task.find().lean(),
+      TaskSession.find().lean(),
+      DailyRecord.find().sort({ date: 1 }).lean(),
+      Strike.find().sort({ createdAt: -1 }).lean(),
+      Goal.find().lean(),
+      Project.find().lean(),
+      Gamification.findOne().lean()
+    ]);
+
+    // Filter sessions by period
+    const currentSessions = allSessions.filter(s => {
+      const d = new Date(s.startTime || s.createdAt);
+      return d >= startDate && d <= now;
+    });
+
+    const prevSessions = allSessions.filter(s => {
+      const d = new Date(s.startTime || s.createdAt);
+      return d >= prevStartDate && d < startDate;
+    });
+
+    const totalMinutes = currentSessions.reduce((sum, s) => sum + (s.durationMinutes || 0), 0);
+    const prevTotalMinutes = prevSessions.reduce((sum, s) => sum + (s.durationMinutes || 0), 0);
+    const percentChange = prevTotalMinutes > 0
+      ? Math.round(((totalMinutes - prevTotalMinutes) / prevTotalMinutes) * 100)
+      : (totalMinutes > 0 ? 100 : 0);
+
+    // Filter tasks active in this period
+    const periodTasks = tasks.filter(t => {
+      const completedInPeriod = t.completedAt && t.completedAt.split('T')[0] >= startDateStr;
+      const scheduledInPeriod = t.scheduledDate && t.scheduledDate >= startDateStr;
+      const hasSession = currentSessions.some(s => s.taskId === t._id.toString());
+      return completedInPeriod || scheduledInPeriod || hasSession;
+    });
+
+    const taskMap = new Map(tasks.map(t => [t._id.toString(), t]));
+    const projectMap = new Map(projects.map(p => [p._id.toString(), p.name]));
+
+    // Group time by category and project
     const timeByCategory = {};
     const timeByProject = {};
-    
-    // Group time by category and project
-    for (const session of sessions) {
+
+    for (const session of currentSessions) {
       if (session.durationMinutes > 0) {
-        totalMinutes += session.durationMinutes;
-        const task = tasks.find(t => t._id.toString() === session.taskId);
-        if (task) {
-          if (task.category) {
-            timeByCategory[task.category] = (timeByCategory[task.category] || 0) + session.durationMinutes;
-          }
-          if (task.projectId) {
-            timeByProject[task.projectId] = (timeByProject[task.projectId] || 0) + session.durationMinutes;
-          }
+        const task = taskMap.get(session.taskId);
+        const category = task?.category || 'General';
+        timeByCategory[category] = (timeByCategory[category] || 0) + session.durationMinutes;
+
+        const projId = task?.projectId;
+        if (projId) {
+          timeByProject[projId] = (timeByProject[projId] || 0) + session.durationMinutes;
         }
       }
     }
-    
-    const timeByCategoryArray = Object.keys(timeByCategory).map(category => ({ 
-      category, 
+
+    const timeByCategoryArray = Object.keys(timeByCategory).map(category => ({
+      category,
       minutes: timeByCategory[category],
       percentage: totalMinutes > 0 ? Math.round((timeByCategory[category] / totalMinutes) * 100) : 0
-    }));
-    
-    const timeByProjectArray = Object.keys(timeByProject).map(projectId => {
-      const taskWithProject = tasks.find(t => t.projectId === projectId);
-      return { 
-        projectId, 
-        projectName: taskWithProject ? taskWithProject.projectName : 'Unknown',
-        minutes: timeByProject[projectId],
-        percentage: totalMinutes > 0 ? Math.round((timeByProject[projectId] / totalMinutes) * 100) : 0
-      };
-    });
-    
-    const completedTasks = tasks.filter(t => t.status === 'completed');
-    const totalTasksCompleted = completedTasks.length;
-    
-    let requiredTasksCompleted = 0;
-    let requiredTasksTotal = 0;
-    
-    tasks.forEach(t => {
-      if (t.commitmentLevel === 'required') {
-        requiredTasksTotal++;
-        if (t.status === 'completed') requiredTasksCompleted++;
-      }
-    });
-    
-    const requiredCompletionRate = requiredTasksTotal > 0 ? Math.round((requiredTasksCompleted / requiredTasksTotal) * 100) : 100;
-    const completionRate = tasks.length > 0 ? Math.round((totalTasksCompleted / tasks.length) * 100) : 100;
-    
-    // Generate last 7 days daily work history
-    const last7Days = [];
-    const todayForChart = new Date();
-    todayForChart.setHours(0, 0, 0, 0);
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date(todayForChart);
+    })).sort((a, b) => b.minutes - a.minutes);
+
+    const timeByProjectArray = Object.keys(timeByProject).map(projectId => ({
+      projectId,
+      projectName: projectMap.get(projectId) || 'Unknown Project',
+      minutes: timeByProject[projectId],
+      percentage: totalMinutes > 0 ? Math.round((timeByProject[projectId] / totalMinutes) * 100) : 0
+    })).sort((a, b) => b.minutes - a.minutes);
+
+    // Generate daily work history for the chosen window (7, 14, or 30 days) using local calendar dates
+    const dailyWorkHistory = [];
+
+    for (let i = days - 1; i >= 0; i--) {
+      const d = new Date(now);
       d.setDate(d.getDate() - i);
-      const dateStr = d.toISOString().split('T')[0];
+      const dateStr = formatLocalDate(d);
       const dayName = d.toLocaleDateString('en-US', { weekday: 'short' });
-      
+      const formattedDate = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
       const record = dailyRecords.find(r => r.date === dateStr);
-      last7Days.push({
+      const daySessions = currentSessions.filter(s => {
+        const sDate = (s.startTime || (s.createdAt ? new Date(s.createdAt).toISOString() : '')).split('T')[0];
+        return sDate === dateStr;
+      });
+      const sessionMins = daySessions.reduce((sum, s) => sum + (s.durationMinutes || 0), 0);
+      const recordMins = record ? Math.floor((record.totalWorkSeconds || 0) / 60) : 0;
+      const finalMins = Math.max(recordMins, sessionMins);
+
+      // Combine planned required tasks and missed required tasks from record
+      let allPlannedReq = Array.from(new Set([
+        ...(record?.requiredTaskIds || []),
+        ...(record?.missedTaskIds || [])
+      ]));
+
+      // Include tasks scheduled for this day with commitmentLevel === 'required'
+      const scheduledReq = tasks.filter(t => t.scheduledDate === dateStr && t.commitmentLevel === 'required');
+      for (const t of scheduledReq) {
+        allPlannedReq.push(t._id.toString());
+      }
+      allPlannedReq = Array.from(new Set(allPlannedReq));
+
+      const compIds = Array.from(new Set([
+        ...(record?.completedTaskIds || []),
+        ...tasks.filter(t => t.scheduledDate === dateStr && t.status === 'completed').map(t => t._id.toString())
+      ]));
+
+      const completedRequiredCount = allPlannedReq.filter(id => compIds.includes(id)).length;
+      const totalRequiredCount = allPlannedReq.length;
+
+      dailyWorkHistory.push({
         date: dateStr,
         day: dayName,
-        minutes: record ? Math.floor((record.totalWorkSeconds || 0) / 60) : 0,
-        requiredCount: record?.requiredTaskIds?.length || 0,
-        completedCount: record?.completedTaskIds?.length || 0
+        formattedDate,
+        minutes: finalMins,
+        requiredCount: totalRequiredCount,
+        completedCount: completedRequiredCount,
+        status: record?.status || (finalMins > 0 ? 'partial' : 'no_progress')
       });
     }
 
-    const estimatedVsActual = completedTasks.map(t => ({
-      taskId: t._id.toString(),
-      title: t.title,
-      category: t.category || 'Uncategorized',
-      estimatedMinutes: t.estimatedMinutes || 0,
-      actualMinutes: t.actualMinutes || 0,
-      differenceMinutes: (t.actualMinutes || 0) - (t.estimatedMinutes || 0)
-    }));
+    // Historical Period Discipline Rate
+    const totalPeriodRequired = dailyWorkHistory.reduce((sum, d) => sum + d.requiredCount, 0);
+    const completedPeriodRequired = dailyWorkHistory.reduce((sum, d) => sum + d.completedCount, 0);
+    const requiredCompletionRate = totalPeriodRequired > 0
+      ? Math.round((completedPeriodRequired / totalPeriodRequired) * 100)
+      : 100;
 
-    // DSA speed & problem telemetry
-    const dsaGoal = await Goal.findOne({ category: 'DSA' });
-    const dsaTasks = tasks.filter(t => t.category === 'DSA');
+    // Real Strike Audit (for top scorecard count)
+    const openStrikes = strikes.filter(s => s.status === 'open');
+    const resolvedStrikes = strikes.filter(s => s.status === 'resolved');
+    const periodStrikes = strikes.filter(s => {
+      const sDate = s.date || (s.createdAt ? new Date(s.createdAt).toISOString().split('T')[0] : null);
+      return sDate && sDate >= startDateStr;
+    });
+
+    const strikeHistory = {
+      total: strikes.length,
+      open: openStrikes.length,
+      resolved: resolvedStrikes.length,
+      periodCount: periodStrikes.length,
+      recentPeriodStrikes: periodStrikes.map(s => ({
+        number: s.number,
+        reason: s.reason,
+        date: s.date || (s.createdAt ? new Date(s.createdAt).toISOString().split('T')[0] : 'N/A'),
+        status: s.status,
+        taskTitle: s.taskTitle,
+        severity: s.severity || 'medium'
+      }))
+    };
+
+    // Category Breakdown with Health Assessment
+    const allCategories = Array.from(new Set([
+      ...Object.keys(timeByCategory),
+      ...periodTasks.map(t => t.category).filter(Boolean)
+    ]));
+
+    const categoryBreakdown = allCategories.map(cat => {
+      const catTasks = periodTasks.filter(t => (t.category || '').toUpperCase() === cat.toUpperCase());
+      const catCompleted = catTasks.filter(t => t.status === 'completed');
+      const catRequired = catTasks.filter(t => t.commitmentLevel === 'required');
+      const catRequiredCompleted = catRequired.filter(t => t.status === 'completed');
+      const minutes = timeByCategory[cat] || 0;
+      const percentage = totalMinutes > 0 ? Math.round((minutes / totalMinutes) * 100) : 0;
+      const completionRate = catTasks.length > 0 ? Math.round((catCompleted.length / catTasks.length) * 100) : (minutes > 0 ? 100 : 0);
+      const requiredRate = catRequired.length > 0 ? Math.round((catRequiredCompleted.length / catRequired.length) * 100) : 100;
+
+      let health = 'on_track';
+      if (completionRate >= 80 && minutes >= 45 && requiredRate >= 80) {
+        health = 'excelling';
+      } else if (catTasks.length >= 2 && completionRate < 50 && minutes === 0) {
+        health = 'needs_attention';
+      }
+
+      return {
+        category: cat,
+        minutes,
+        percentage,
+        totalTasks: catTasks.length,
+        completedTasks: catCompleted.length,
+        completionRate,
+        requiredRate,
+        rescheduleCount: 0,
+        health
+      };
+    }).sort((a, b) => b.minutes - a.minutes);
+
+    // Total task completion across period
+    const completedTasks = periodTasks.filter(t => t.status === 'completed');
+    const totalTasksCompleted = completedTasks.length;
+    const completionRate = periodTasks.length > 0 ? Math.round((totalTasksCompleted / periodTasks.length) * 100) : (totalMinutes > 0 ? 100 : 0);
+
+    // Estimation Variance: only analyze tasks that had an actual planned estimate (> 0) and not auto-generated project timers
+    const estimatedVsActual = completedTasks
+      .filter(t => (t.estimatedMinutes || 0) > 0 && !t.title.startsWith('Work Session:'))
+      .map(t => {
+        const taskSessions = currentSessions.filter(s => s.taskId === t._id.toString());
+        const sessionMins = taskSessions.reduce((sum, s) => sum + (s.durationMinutes || 0), 0);
+        const actualMinutes = sessionMins > 0 ? sessionMins : (t.actualMinutes || 0);
+
+        return {
+          taskId: t._id.toString(),
+          title: t.title,
+          category: t.category || 'General',
+          estimatedMinutes: t.estimatedMinutes,
+          actualMinutes,
+          differenceMinutes: actualMinutes - t.estimatedMinutes
+        };
+      })
+      .sort((a, b) => Math.abs(b.differenceMinutes) - Math.abs(a.differenceMinutes));
+
+    const validEstimates = estimatedVsActual;
+    const overEstimatedCount = validEstimates.filter(e => e.differenceMinutes < 0).length;
+    const underEstimatedCount = validEstimates.filter(e => e.differenceMinutes > 0).length;
+    const avgVarianceMinutes = validEstimates.length > 0
+      ? Math.round(validEstimates.reduce((sum, e) => sum + e.differenceMinutes, 0) / validEstimates.length)
+      : 0;
+
+    // Retrospective Insights: Strengths, Lags & Recommendations
+    const strengths = [];
+    const lags = [];
+    const recommendations = [];
+
+    // 1. Peak focus day
+    const peakDay = dailyWorkHistory.reduce((max, d) => d.minutes > max.minutes ? d : max, { minutes: 0, day: 'N/A', formattedDate: '' });
+    if (peakDay.minutes > 0) {
+      const hrs = Math.floor(peakDay.minutes / 60);
+      const mins = peakDay.minutes % 60;
+      strengths.push({
+        title: 'Peak Focus Output',
+        detail: `${peakDay.day} (${peakDay.formattedDate}) was your highest output day with ${hrs > 0 ? `${hrs}h ` : ''}${mins}m of logged deep work.`,
+        metric: `${hrs > 0 ? `${hrs}h ` : ''}${mins}m`
+      });
+    }
+
+    // 2. Excelling categories
+    const excellingCats = categoryBreakdown.filter(c => c.health === 'excelling');
+    if (excellingCats.length > 0) {
+      const top = excellingCats[0];
+      strengths.push({
+        title: `Stronghold: ${top.category}`,
+        detail: `${top.category} had ${top.completionRate}% completion rate across ${top.completedTasks} tasks with ${Math.floor(top.minutes / 60)}h ${top.minutes % 60}m logged.`,
+        metric: `${top.completionRate}% Done`
+      });
+    }
+
+    // 3. Discipline rate
+    if (requiredCompletionRate >= 80 && totalPeriodRequired > 0) {
+      strengths.push({
+        title: 'Commitment Adherence',
+        detail: `You fulfilled ${completedPeriodRequired} of ${totalPeriodRequired} daily commitments (${requiredCompletionRate}% rate) over the past ${days} days.`,
+        metric: `${requiredCompletionRate}%`
+      });
+    }
+
+    // 4. Clean accountability standing
+    if (periodStrikes.length === 0) {
+      strengths.push({
+        title: 'Clean Accountability Standing',
+        detail: `No penalty strikes incurred across the entire ${days}-day review window.`,
+        metric: '0 Strikes'
+      });
+    }
+
+    // Lags / Growth Areas (Strikes, Zero-focus days, and reschedules removed per feedback)
+    const laggingCats = categoryBreakdown.filter(c => c.health === 'needs_attention');
+    if (laggingCats.length > 0) {
+      const topLag = laggingCats[0];
+      lags.push({
+        title: `Attention Needed: ${topLag.category}`,
+        detail: `${topLag.category} has ${topLag.totalTasks - topLag.completedTasks} pending task(s) and 0 focus minutes recorded in this period. Consider scheduling a dedicated session.`,
+        metric: `${topLag.completedTasks}/${topLag.totalTasks} Done`
+      });
+    }
+
+    if (requiredCompletionRate < 75 && totalPeriodRequired > 0) {
+      lags.push({
+        title: 'Commitment Adherence Drop',
+        detail: `Completed ${completedPeriodRequired} of ${totalPeriodRequired} daily commitments (${requiredCompletionRate}% rate). Aim for 80%+ consistency.`,
+        metric: `${requiredCompletionRate}%`
+      });
+    }
+
+    // Fallbacks
+    if (strengths.length === 0) {
+      strengths.push({
+        title: 'Foundational Tracking Active',
+        detail: 'Sessions and tasks are being tracked. Log more focused timers to generate deeper performance benchmarks.',
+        metric: 'Active'
+      });
+    }
+    if (lags.length === 0) {
+      lags.push({
+        title: 'Disciplined Execution',
+        detail: 'No critical category neglect or commitment drops detected. All active fields are progressing steadily.',
+        metric: 'Optimal'
+      });
+    }
+
+    // Actionable Recommendations
+    if (laggingCats.length > 0) {
+      recommendations.push(`Schedule a dedicated 30-45 minute focus session for "${laggingCats[0].category}" to build momentum.`);
+    }
+    if (avgVarianceMinutes > 20) {
+      recommendations.push(`Tasks ran +${avgVarianceMinutes}m over estimate on average. Add a 15-minute buffer when scheduling complex tasks.`);
+    }
+    if (recommendations.length === 0) {
+      recommendations.push('Performance metrics are strong. Continue maintaining steady daily timer sessions across your primary projects.');
+    }
+
+    // DSA Velocity Telemetry
+    const dsaGoal = goals.find(g => g.category === 'DSA');
+    const dsaTasks = periodTasks.filter(t => t.category === 'DSA');
     const dsaCompleted = dsaTasks.filter(t => t.status === 'completed');
     const dsaProblemsCount = dsaGoal ? dsaGoal.currentValue : dsaCompleted.reduce((sum, t) => sum + (t.questionsSolved || 1), 0);
     const dsaTotalMinutes = timeByCategory['DSA'] || 0;
     const dsaAvgMinutes = dsaProblemsCount > 0 ? Math.round(dsaTotalMinutes / dsaProblemsCount) : 0;
-    
-    res.json({ 
-      success: true, 
-      data: { 
-        period: 'all', 
-        totalMinutes, 
-        totalTasksCompleted, 
-        totalTasksMissed: tasks.filter(t => t.status === 'missed').length, 
-        completionRate, 
-        requiredCompletionRate, 
-        timeByCategory: timeByCategoryArray, 
-        timeByProject: timeByProjectArray, 
-        dailyWorkHistory: last7Days, 
-        estimatedVsActual: estimatedVsActual,
+
+    res.json({
+      success: true,
+      data: {
+        period: `${days}d`,
+        periodDays: days,
+        totalMinutes,
+        totalTasksCompleted,
+        totalTasksMissed: periodTasks.filter(t => t.status === 'missed').length,
+        completionRate,
+        requiredCompletionRate,
+        timeByCategory: timeByCategoryArray,
+        timeByProject: timeByProjectArray,
+        dailyWorkHistory,
+        estimatedVsActual,
+        estimationMetrics: {
+          avgVarianceMinutes,
+          overEstimatedCount,
+          underEstimatedCount,
+          totalAnalyzed: validEstimates.length
+        },
+        categoryBreakdown,
+        performanceInsights: {
+          strengths,
+          lags,
+          recommendations
+        },
         dsaAnalytics: {
           problemsCompleted: dsaProblemsCount,
           totalMinutes: dsaTotalMinutes,
           avgMinutesPerProblem: dsaAvgMinutes
         },
-        strikeHistory: {total:0, open:0, resolved:0, byMonth:[]} 
+        currentStreak: computeStreakMetrics(
+          dailyRecords,
+          {
+            totalRequired: tasks.filter(t => t.scheduledDate === formatLocalDate(now) && t.commitmentLevel === 'required').length,
+            completedRequired: tasks.filter(t => t.scheduledDate === formatLocalDate(now) && t.commitmentLevel === 'required' && t.status === 'completed').length
+          },
+          dailyRecords.find(r => r.date === formatLocalDate(now)),
+          gamification?.longestStreak || 0
+        ).currentStreak,
+        longestStreak: computeStreakMetrics(
+          dailyRecords,
+          {
+            totalRequired: tasks.filter(t => t.scheduledDate === formatLocalDate(now) && t.commitmentLevel === 'required').length,
+            completedRequired: tasks.filter(t => t.scheduledDate === formatLocalDate(now) && t.commitmentLevel === 'required' && t.status === 'completed').length
+          },
+          dailyRecords.find(r => r.date === formatLocalDate(now)),
+          gamification?.longestStreak || 0
+        ).longestStreak,
+        strikeHistory,
+        periodComparison: {
+          prevTotalMinutes,
+          percentChange
+        }
       }
     });
   } catch(e) {
