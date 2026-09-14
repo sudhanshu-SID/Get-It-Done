@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 
 const ProjectSchema = new mongoose.Schema({
+  userId: { type: String, required: true, index: true },
   name: { type: String, required: true },
   description: String,
   status: { type: String, enum: ['active', 'paused', 'completed', 'archived'], default: 'active' },

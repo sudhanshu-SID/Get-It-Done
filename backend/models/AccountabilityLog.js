@@ -1,6 +1,11 @@
 const mongoose = require('mongoose');
 
 const AccountabilityLogSchema = new mongoose.Schema({
+  userId: {
+    type: String,
+    required: true,
+    index: true,
+  },
   timestamp: {
     type: Date,
     default: Date.now,

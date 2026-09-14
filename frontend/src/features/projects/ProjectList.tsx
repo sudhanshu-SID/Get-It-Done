@@ -26,6 +26,7 @@ interface ProjectListProps {
   onUncompleteTask: (taskId: string) => Promise<void>;
   onCreateTaskForProject: (projectId: string) => void;
   onStartProjectTimer: (projectId: string) => Promise<void>;
+  onRequireAuth?: () => void;
 }
 
 export const ProjectList: React.FC<ProjectListProps> = ({
@@ -39,7 +40,8 @@ export const ProjectList: React.FC<ProjectListProps> = ({
   onCompleteTask,
   onUncompleteTask,
   onCreateTaskForProject,
-  onStartProjectTimer
+  onStartProjectTimer,
+  onRequireAuth
 }) => {
   const [selectedProjectId, setSelectedProjectId] = useState<string>(projects[0]?._id || '');
 
@@ -57,7 +59,7 @@ export const ProjectList: React.FC<ProjectListProps> = ({
   return (
     <div className="space-y-6 pb-12 relative">
       {/* Sticky Notes for the selected project */}
-      {activeProject && <StickyBoard key={activeProject._id} projectId={activeProject._id} />}
+      {activeProject && <StickyBoard key={activeProject._id} projectId={activeProject._id} onRequireAuth={onRequireAuth} />}
 
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between border-b-2 border-[#141414] pb-4 gap-3">

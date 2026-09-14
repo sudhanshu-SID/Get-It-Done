@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 
 const ConsequenceSchema = new mongoose.Schema({
+  userId: { type: String, required: true, index: true },
   title: { type: String, required: true },
   type: { type: String, enum: ['restriction', 'financial', 'custom'], required: true },
   description: String,

@@ -44,6 +44,7 @@ interface TodayDashboardProps {
   onSaveDailyNote: (note: string) => Promise<void>;
   onNavigateToProjects: () => void;
   onNavigateToHistory: () => void;
+  onRequireAuth?: () => void;
 }
 
 export const TodayDashboard: React.FC<TodayDashboardProps> = ({
@@ -64,7 +65,8 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
   onRecordNoProgress,
   onSaveDailyNote,
   onNavigateToProjects,
-  onNavigateToHistory
+  onNavigateToHistory,
+  onRequireAuth
 }) => {
   const [showOptional, setShowOptional] = useState(true);
   const [showYesterdayDetails, setShowYesterdayDetails] = useState(false);
@@ -72,6 +74,12 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
   const [isSavingNote, setIsSavingNote] = useState(false);
   const [noteSavedFeedback, setNoteSavedFeedback] = useState(false);
   const [focusTimerDisplay, setFocusTimerDisplay] = useState('00:00');
+
+  React.useEffect(() => {
+    if (data.dailyNote !== undefined) {
+      setDailyNoteText(data.dailyNote || '');
+    }
+  }, [data.dailyNote]);
 
   React.useEffect(() => {
     if (!activeTimer) {
@@ -134,7 +142,7 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
 
   return (
     <div className="space-y-6 pb-12">
-      <StickyBoard />
+      <StickyBoard onRequireAuth={onRequireAuth} />
 
       {/* Active Penalty Banner with Live Countdown */}
       {activeConsequences && activeConsequences.length > 0 && onResolveConsequence && (
@@ -148,12 +156,12 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between border-b-2 border-[#141414] pb-4 gap-4">
         <div>
           <div className="flex items-center space-x-2 text-[10px] font-mono uppercase tracking-widest opacity-60 font-bold">
-            <span>{data.formattedDate}</span>
+            <span>{data?.formattedDate || new Date().toLocaleDateString()}</span>
             <span>·</span>
-            <span>{data.user.timezone}</span>
+            <span>{data?.user?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone}</span>
           </div>
           <h1 className="mt-0.5 text-2xl sm:text-3xl font-black tracking-tight text-[#141414] uppercase">
-            {getGreeting()}, {data.user.name}
+            {getGreeting()}, {data?.user?.name || 'OPERATIVE'}
           </h1>
         </div>
 
@@ -496,16 +504,24 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
               </span>
             </button>
 
-            {showOptional && (
-              <div className="divide-y divide-black/10 pt-2">
-                {data.optionalTasks.length === 0 ? (
-                  <p className="text-xs opacity-60 italic py-2">No optional tasks logged today.</p>
-                ) : (
-                  data.optionalTasks.map(task => {
-                    const isCompleted = task.status === 'completed';
-                    const isCurrentActive = activeTimer?.taskId === task._id;
+            {showOptional && (() => {
+              const visibleOptionalTasks = (data.optionalTasks || []).filter(task => {
+                if (task.status === 'completed' && (!task.recurrence || task.recurrence === 'none')) {
+                  return false;
+                }
+                return true;
+              });
 
-                    return (
+              return (
+                <div className="divide-y divide-black/10 pt-2">
+                  {visibleOptionalTasks.length === 0 ? (
+                    <p className="text-xs opacity-60 italic py-2">No optional tasks logged today.</p>
+                  ) : (
+                    visibleOptionalTasks.map(task => {
+                      const isCompleted = task.status === 'completed';
+                      const isCurrentActive = activeTimer?.taskId === task._id;
+
+                      return (
                       <div
                         key={task._id}
                         className={`py-2 px-2 transition-colors flex items-center justify-between ${
@@ -554,7 +570,8 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
                   })
                 )}
               </div>
-            )}
+              );
+            })()}
           </div>
 
           {/* "I DID NOTHING TODAY" Action */}
@@ -577,90 +594,8 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
               </button>
             </div>
           </div>
-        </div>
 
-        {/* Right Column: Project Context ("WHERE I LEFT OFF") & Yesterday Summary (5 cols) */}
-        <div className="lg:col-span-5 space-y-6">
-          {/* WHERE I LEFT OFF (Project Context Cards) */}
-          <div className="border-2 border-[#141414] bg-white p-5 space-y-4">
-            <div className="flex items-center justify-between border-b border-[#141414] pb-3">
-              <div className="flex items-center space-x-2">
-                <FolderKanban className="h-4 w-4 text-[#141414]" />
-                <h2 className="text-xs font-mono font-bold tracking-widest uppercase text-[#141414]">
-                  Project State & Left-Off
-                </h2>
-              </div>
-              <button
-                onClick={onNavigateToProjects}
-                className="text-[10px] font-mono uppercase font-bold text-[#141414] hover:underline cursor-pointer"
-              >
-                All Projects →
-              </button>
-            </div>
-
-            {data.projectContexts.length === 0 ? (
-              <div className="border border-dashed border-[#141414] bg-[#E4E3E0] p-4 text-xs font-mono opacity-70">
-                No active projects found.
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {data.projectContexts.map(({ project }) => (
-                  <div
-                    key={project._id}
-                    className="border border-[#141414] bg-[#E4E3E0] p-3.5 space-y-2.5"
-                  >
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <h3 className="text-xs font-black uppercase text-[#141414]">{project.name}</h3>
-                        <span className="text-[10px] font-mono opacity-60 uppercase font-bold">
-                          {project.currentPhase}
-                        </span>
-                      </div>
-                      <button
-                        onClick={() => onOpenContextEditModal(project)}
-                        className="border border-[#141414] bg-white p-1 hover:bg-[#141414] hover:text-white transition-colors cursor-pointer"
-                        title="Update Where I Left Off"
-                      >
-                        <Edit3 className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-
-                    <div className="border border-[#141414] bg-white p-2.5 space-y-2 text-xs">
-                      <div>
-                        <span className="text-[9px] font-mono font-bold uppercase tracking-widest opacity-50 block">
-                          Where I Left Off:
-                        </span>
-                        <p className="mt-0.5 text-[#141414] text-[11px] leading-relaxed font-mono">
-                          {project.currentState}
-                        </p>
-                      </div>
-
-                      <div className="border-t border-black/10 pt-2">
-                        <span className="text-[9px] font-mono font-bold uppercase tracking-widest text-amber-700 block">
-                          Next Immediate Action:
-                        </span>
-                        <p className="mt-0.5 text-[#141414] text-[11px] font-bold leading-relaxed font-mono">
-                          {project.nextAction}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center justify-between text-[10px] font-mono opacity-80 pt-1">
-                      <span>Total Time: {formatMinutes(project.totalTimeMinutes || 0)}</span>
-                      <button
-                        onClick={() => onOpenContextEditModal(project)}
-                        className="font-bold underline cursor-pointer"
-                      >
-                        Update State →
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* YESTERDAY'S RECAP */}
+          {/* YESTERDAY'S RECAP (Shifted to Left Column) */}
           {data.yesterday && (
             <div className="border-2 border-[#141414] bg-white p-4 space-y-3">
               <div className="flex items-center justify-between border-b border-[#141414] pb-2">
@@ -729,7 +664,7 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
             </div>
           )}
 
-          {/* DAILY REVIEW NOTE */}
+          {/* DAILY REVIEW NOTE (Shifted to Left Column) */}
           <div className="border-2 border-[#141414] bg-white p-4 space-y-2.5">
             <div className="flex items-center justify-between border-b border-[#141414] pb-1.5">
               <span className="text-xs font-mono font-bold uppercase tracking-wider text-[#141414]">
@@ -756,6 +691,101 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
                 {isSavingNote ? 'Saving...' : 'Save Note'}
               </button>
             </div>
+          </div>
+        </div>
+
+        {/* Right Column: Project Context ("WHERE I LEFT OFF") - Limited to Top 4 to Prevent Endless Scrolling */}
+        <div className="lg:col-span-5 space-y-6">
+          <div className="border-2 border-[#141414] bg-white p-5 space-y-4">
+            <div className="flex items-center justify-between border-b border-[#141414] pb-3">
+              <div className="flex items-center space-x-2">
+                <FolderKanban className="h-4 w-4 text-[#141414]" />
+                <h2 className="text-xs font-mono font-bold tracking-widest uppercase text-[#141414]">
+                  Project State & Left-Off
+                </h2>
+              </div>
+              <button
+                onClick={onNavigateToProjects}
+                className="text-[10px] font-mono uppercase font-bold text-[#141414] hover:underline cursor-pointer"
+              >
+                All Projects ({data.projectContexts.length}) →
+              </button>
+            </div>
+
+            {data.projectContexts.length === 0 ? (
+              <div className="border border-dashed border-[#141414] bg-[#E4E3E0] p-4 text-xs font-mono opacity-70">
+                No active projects found.
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {data.projectContexts.slice(0, 4).map(({ project }) => (
+                  <div
+                    key={project._id}
+                    className="border border-[#141414] bg-[#E4E3E0] p-3.5 space-y-2.5"
+                  >
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <h3 className="text-xs font-black uppercase text-[#141414]">{project.name}</h3>
+                        <span className="text-[10px] font-mono opacity-60 uppercase font-bold">
+                          {project.currentPhase}
+                        </span>
+                      </div>
+                      <button
+                        onClick={() => onOpenContextEditModal(project)}
+                        className="border border-[#141414] bg-white p-1 hover:bg-[#141414] hover:text-white transition-colors cursor-pointer"
+                        title="Update Where I Left Off"
+                      >
+                        <Edit3 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+
+                    <div className="border border-[#141414] bg-white p-2.5 space-y-2 text-xs">
+                      <div>
+                        <span className="text-[9px] font-mono font-bold uppercase tracking-widest opacity-50 block">
+                          Where I Left Off:
+                        </span>
+                        <p className="mt-0.5 text-[#141414] text-[11px] leading-relaxed font-mono">
+                          {project.currentState}
+                        </p>
+                      </div>
+
+                      <div className="border-t border-black/10 pt-2">
+                        <span className="text-[9px] font-mono font-bold uppercase tracking-widest text-amber-700 block">
+                          Next Immediate Action:
+                        </span>
+                        <p className="mt-0.5 text-[#141414] text-[11px] font-bold leading-relaxed font-mono">
+                          {project.nextAction}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between text-[10px] font-mono opacity-80 pt-1">
+                      <span>Total Time: {formatMinutes(project.totalTimeMinutes || 0)}</span>
+                      <button
+                        onClick={() => onOpenContextEditModal(project)}
+                        className="font-bold underline cursor-pointer"
+                      >
+                        Update State →
+                      </button>
+                    </div>
+                  </div>
+                ))}
+
+                {data.projectContexts.length > 4 && (
+                  <div className="border border-dashed border-[#141414] bg-[#E4E3E0] p-3 text-center text-xs font-mono">
+                    <span className="opacity-70">
+                      +{data.projectContexts.length - 4} more projects in workspace
+                    </span>
+                    <button
+                      onClick={onNavigateToProjects}
+                      className="ml-2 font-bold underline text-[#141414] hover:text-black cursor-pointer"
+                    >
+                      View All Projects →
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>

@@ -7,7 +7,7 @@ const handleError = (res, error, defaultMessage = 'Server Error') => {
 
 exports.getNotes = async (req, res) => {
   try {
-    const filters = {};
+    const filters = { userId: req.userId };
     if (req.query.projectId) {
       filters.projectId = req.query.projectId;
     } else {
@@ -23,7 +23,7 @@ exports.getNotes = async (req, res) => {
 
 exports.createNote = async (req, res) => {
   try {
-    const note = await Note.create(req.body);
+    const note = await Note.create({ ...req.body, userId: req.userId });
     res.status(201).json({ success: true, data: note });
   } catch (error) {
     handleError(res, error, 'Failed to create note');
@@ -32,7 +32,7 @@ exports.createNote = async (req, res) => {
 
 exports.updateNote = async (req, res) => {
   try {
-    const note = await Note.findByIdAndUpdate(req.params.id, req.body, { returnDocument: 'after' });
+    const note = await Note.findOneAndUpdate({ _id: req.params.id, userId: req.userId }, req.body, { returnDocument: 'after' });
     if (!note) return res.status(404).json({ success: false, message: 'Note not found' });
     res.json({ success: true, data: note });
   } catch (error) {
@@ -42,7 +42,7 @@ exports.updateNote = async (req, res) => {
 
 exports.deleteNote = async (req, res) => {
   try {
-    const note = await Note.findByIdAndDelete(req.params.id);
+    const note = await Note.findOneAndDelete({ _id: req.params.id, userId: req.userId });
     if (!note) return res.status(404).json({ success: false, message: 'Note not found' });
     res.json({ success: true, data: { message: 'Deleted successfully' } });
   } catch (error) {

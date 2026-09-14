@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 
 const GoalSchema = new mongoose.Schema({
+  userId: { type: String, required: true, index: true },
   title: { type: String, required: true },
   description: String,
   type: { type: String, enum: ['task_count', 'metric_count', 'time_spent', 'streak', 'completion_rate', 'custom'], required: true },

@@ -13,9 +13,13 @@ import {
   Clock,
   Play,
   Pause,
-  Square
+  Square,
+  User as UserIcon,
+  LogOut,
+  LogIn
 } from 'lucide-react';
 import { ActiveTimer } from '../types/index';
+import { useAuth } from '../context/AuthContext';
 
 export type NavTab =
   | 'today'
@@ -25,7 +29,8 @@ export type NavTab =
   | 'rewards'
   | 'strikes'
   | 'analytics'
-  | 'settings';
+  | 'settings'
+  | 'auth';
 
 interface NavbarProps {
   currentTab: NavTab;
@@ -56,6 +61,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onResumeTimer,
   onStopTimer
 }) => {
+  const { user, logout } = useAuth();
   const [timerDisplay, setTimerDisplay] = React.useState('00:00');
   const [sessionClock, setSessionClock] = React.useState('');
 
@@ -243,17 +249,35 @@ export const Navbar: React.FC<NavbarProps> = ({
             </div>
           )}
 
-          {/* Jarvis Assistant Hook - Commented out for now
-          <button
-            id="open-jarvis-modal-btn"
-            onClick={onOpenAgentInspector}
-            className="flex items-center space-x-1.5 border border-[#141414] bg-white px-2.5 py-1 text-[11px] font-mono uppercase font-bold tracking-wider text-[#141414] hover:bg-[#141414] hover:text-white transition-colors cursor-pointer"
-          >
-            <Bot className="h-3.5 w-3.5 text-green-600" />
-            <span className="hidden sm:inline">Jarvis Agent</span>
-            <span className="h-1.5 w-1.5 rounded-full bg-green-600"></span>
-          </button>
-          */}
+          {/* User Profile & Auth Controls */}
+          {user ? (
+            <div className="flex items-center gap-2 border border-[#141414] bg-white px-2.5 py-1 text-[11px] font-mono">
+              <UserIcon className="h-3.5 w-3.5 text-neutral-600" />
+              <span className="font-bold text-[#141414] max-w-[120px] truncate">
+                {user.name}
+              </span>
+              {user.role === 'admin' && (
+                <span className="bg-red-600 text-white text-[9px] font-bold px-1 py-0.2 tracking-wider">
+                  ADMIN
+                </span>
+              )}
+              <button
+                onClick={() => logout()}
+                title="Sign Out"
+                className="ml-1 pl-1 border-l border-neutral-300 hover:text-red-600 transition-colors cursor-pointer"
+              >
+                <LogOut className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => onSelectTab('auth')}
+              className="flex items-center gap-1.5 border border-[#141414] bg-black text-white px-3 py-1 text-[11px] font-mono uppercase font-bold tracking-wider hover:bg-neutral-800 transition-colors cursor-pointer"
+            >
+              <LogIn className="h-3.5 w-3.5" />
+              <span>Sign In</span>
+            </button>
+          )}
         </div>
       </div>
 

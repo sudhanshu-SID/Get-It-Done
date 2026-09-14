@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 
 const NoteSchema = new mongoose.Schema({
+  userId: { type: String, required: true, index: true },
   content: { type: String, default: '' },
   color: { type: String, default: 'yellow' },
   position: {

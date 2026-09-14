@@ -10,8 +10,15 @@ const ActiveTimer = require('../models/ActiveTimer');
 const TaskSession = require('../models/TaskSession');
 const UserSettings = require('../models/UserSettings');
 const DailyRecord = require('../models/DailyRecord');
-const Gamification = require('../models/Gamification');
+const { Gamification } = require('../models');
 const dailyService = require('../services/dailyService');
+const { requireAuth } = require('../middleware/auth');
+
+// Allow health ping check without auth
+router.get('/health', (req, res) => res.json({ status: 'ok', timestamp: Date.now() }));
+
+// Protect all remaining REST routes with Firebase Authentication
+router.use(requireAuth);
 
 function computeStreakMetrics(allRecords, todaySummary, todayRecord, storedLongest = 0) {
   const recordMap = new Map();
@@ -111,24 +118,27 @@ function computeStreakMetrics(allRecords, todaySummary, todayRecord, storedLonge
 
 const makeCrud = (model, path) => {
   router.get(path, async (req, res) => {
-    try { res.json({ success: true, data: await model.find() }); }
-    catch(e) { res.status(500).json({ success: false, message: e.message }); }
+    try { res.json({ success: true, data: await model.find({ userId: req.userId }) }); }
+    catch (e) { res.status(500).json({ success: false, message: e.message }); }
   });
   router.get(`${path}/:id`, async (req, res) => {
-    try { res.json({ success: true, data: await model.findById(req.params.id) }); }
-    catch(e) { res.status(500).json({ success: false, message: e.message }); }
+    try { res.json({ success: true, data: await model.findOne({ _id: req.params.id, userId: req.userId }) }); }
+    catch (e) { res.status(500).json({ success: false, message: e.message }); }
   });
   router.post(path, async (req, res) => {
-    try { res.json({ success: true, data: await model.create(req.body) }); }
-    catch(e) { res.status(500).json({ success: false, message: e.message }); }
+    try {
+      const data = { ...req.body, userId: req.userId };
+      res.json({ success: true, data: await model.create(data) });
+    }
+    catch (e) { res.status(500).json({ success: false, message: e.message }); }
   });
   router.patch(`${path}/:id`, async (req, res) => {
-    try { res.json({ success: true, data: await model.findByIdAndUpdate(req.params.id, req.body, { returnDocument: 'after' }) }); }
-    catch(e) { res.status(500).json({ success: false, message: e.message }); }
+    try { res.json({ success: true, data: await model.findOneAndUpdate({ _id: req.params.id, userId: req.userId }, req.body, { returnDocument: 'after' }) }); }
+    catch (e) { res.status(500).json({ success: false, message: e.message }); }
   });
   router.delete(`${path}/:id`, async (req, res) => {
-    try { await model.findByIdAndDelete(req.params.id); res.json({ success: true, data: {message: 'Deleted'} }); }
-    catch(e) { res.status(500).json({ success: false, message: e.message }); }
+    try { await model.findOneAndDelete({ _id: req.params.id, userId: req.userId }); res.json({ success: true, data: { message: 'Deleted' } }); }
+    catch (e) { res.status(500).json({ success: false, message: e.message }); }
   });
 };
 
@@ -137,11 +147,11 @@ makeCrud(Project, '/projects');
 
 router.patch('/goals/:id', async (req, res) => {
   try {
-    const goal = await Goal.findByIdAndUpdate(req.params.id, req.body, { returnDocument: 'after' });
+    const goal = await Goal.findOneAndUpdate({ _id: req.params.id, userId: req.userId }, req.body, { returnDocument: 'after' });
     if (goal) {
       if (req.body.title) {
         await Reward.updateMany(
-          { linkedGoalId: goal._id.toString() },
+          { userId: req.userId, linkedGoalId: goal._id.toString() },
           { $set: { linkedGoalTitle: goal.title } }
         );
       }
@@ -151,31 +161,31 @@ router.patch('/goals/:id', async (req, res) => {
           await goal.save();
         }
         await Reward.updateMany(
-          { linkedGoalId: goal._id.toString(), status: 'locked' },
+          { userId: req.userId, linkedGoalId: goal._id.toString(), status: 'locked' },
           { $set: { status: 'unlocked', unlockedAt: new Date().toISOString() } }
         );
       } else if (goal.currentValue < goal.targetValue && (goal.status === 'achieved' || goal.status === 'completed')) {
         goal.status = 'active';
         await goal.save();
         await Reward.updateMany(
-          { linkedGoalId: goal._id.toString(), status: { $in: ['unlocked', 'redeemed'] } },
+          { userId: req.userId, linkedGoalId: goal._id.toString(), status: { $in: ['unlocked', 'redeemed'] } },
           { $set: { status: 'locked', unlockedAt: null, redeemedAt: null } }
         );
       }
     }
     res.json({ success: true, data: goal });
-  } catch(e) { res.status(500).json({ success: false, message: e.message }); }
+  } catch (e) { res.status(500).json({ success: false, message: e.message }); }
 });
 
 router.delete('/goals/:id', async (req, res) => {
   try {
     await Reward.updateMany(
-      { linkedGoalId: req.params.id },
+      { userId: req.userId, linkedGoalId: req.params.id },
       { $unset: { linkedGoalId: 1, linkedGoalTitle: 1 } }
     );
-    await Goal.findByIdAndDelete(req.params.id);
+    await Goal.findOneAndDelete({ _id: req.params.id, userId: req.userId });
     res.json({ success: true, data: { message: 'Deleted' } });
-  } catch(e) { res.status(500).json({ success: false, message: e.message }); }
+  } catch (e) { res.status(500).json({ success: false, message: e.message }); }
 });
 
 makeCrud(Goal, '/goals');
@@ -183,28 +193,28 @@ makeCrud(Reward, '/rewards');
 
 router.post('/rewards/:id/redeem', async (req, res) => {
   try {
-    const reward = await Reward.findByIdAndUpdate(
-      req.params.id,
+    const reward = await Reward.findOneAndUpdate(
+      { _id: req.params.id, userId: req.userId },
       { status: 'redeemed', redeemedAt: new Date().toISOString() },
       { returnDocument: 'after' }
     );
     if (!reward) return res.status(404).json({ success: false, message: 'Reward not found' });
     res.json({ success: true, data: reward });
-  } catch(e) { res.status(500).json({ success: false, message: e.message }); }
+  } catch (e) { res.status(500).json({ success: false, message: e.message }); }
 });
 // Consequence Routes
 router.get('/consequences', async (req, res) => {
-  try { res.json({ success: true, data: await Consequence.find().sort({ createdAt: -1 }) }); }
-  catch(e) { res.status(500).json({ success: false, message: e.message }); }
+  try { res.json({ success: true, data: await Consequence.find({ userId: req.userId }).sort({ createdAt: -1 }) }); }
+  catch (e) { res.status(500).json({ success: false, message: e.message }); }
 });
 router.get('/consequences/:id', async (req, res) => {
-  try { res.json({ success: true, data: await Consequence.findById(req.params.id) }); }
-  catch(e) { res.status(500).json({ success: false, message: e.message }); }
+  try { res.json({ success: true, data: await Consequence.findOne({ _id: req.params.id, userId: req.userId }) }); }
+  catch (e) { res.status(500).json({ success: false, message: e.message }); }
 });
 router.post('/consequences', async (req, res) => {
   try {
-    const data = { ...req.body };
-    const openCount = await Strike.countDocuments({ status: 'open' });
+    const data = { ...req.body, userId: req.userId };
+    const openCount = await Strike.countDocuments({ userId: req.userId, status: 'open' });
     const match = data.trigger ? data.trigger.match(/(\d+)/) : null;
     const threshold = match ? parseInt(match[1], 10) : 10;
     if (openCount >= threshold) {
@@ -218,31 +228,31 @@ router.post('/consequences', async (req, res) => {
     }
     const consequence = await Consequence.create(data);
     const strikeService = require('../services/strikeService');
-    await strikeService.checkAndTriggerConsequences();
-    const updated = await Consequence.findById(consequence._id);
+    await strikeService.checkAndTriggerConsequences(undefined, req.userId);
+    const updated = await Consequence.findOne({ _id: consequence._id, userId: req.userId });
     res.json({ success: true, data: updated || consequence });
-  } catch(e) { res.status(500).json({ success: false, message: e.message }); }
+  } catch (e) { res.status(500).json({ success: false, message: e.message }); }
 });
 router.patch('/consequences/:id', async (req, res) => {
   try {
-    const consequence = await Consequence.findByIdAndUpdate(req.params.id, req.body, { returnDocument: 'after' });
+    const consequence = await Consequence.findOneAndUpdate({ _id: req.params.id, userId: req.userId }, req.body, { returnDocument: 'after' });
     const strikeService = require('../services/strikeService');
-    await strikeService.checkAndTriggerConsequences();
-    const updated = await Consequence.findById(req.params.id);
+    await strikeService.checkAndTriggerConsequences(undefined, req.userId);
+    const updated = await Consequence.findOne({ _id: req.params.id, userId: req.userId });
     res.json({ success: true, data: updated || consequence });
-  } catch(e) { res.status(500).json({ success: false, message: e.message }); }
+  } catch (e) { res.status(500).json({ success: false, message: e.message }); }
 });
 router.delete('/consequences/:id', async (req, res) => {
-  try { await Consequence.findByIdAndDelete(req.params.id); res.json({ success: true, data: { message: 'Deleted' } }); }
-  catch(e) { res.status(500).json({ success: false, message: e.message }); }
+  try { await Consequence.findOneAndDelete({ _id: req.params.id, userId: req.userId }); res.json({ success: true, data: { message: 'Deleted' } }); }
+  catch (e) { res.status(500).json({ success: false, message: e.message }); }
 });
 router.post('/consequences/:id/resolve', async (req, res) => {
   try {
     const { consequenceService } = require('../services');
-    const consequence = await consequenceService.resolveConsequence(req.params.id);
+    const consequence = await consequenceService.resolveConsequence(req.params.id, req.userId);
     if (!consequence) return res.status(404).json({ success: false, message: 'Consequence not found' });
     res.json({ success: true, data: consequence });
-  } catch(e) { res.status(500).json({ success: false, message: e.message }); }
+  } catch (e) { res.status(500).json({ success: false, message: e.message }); }
 });
 
 // Note Routes
@@ -265,14 +275,14 @@ router.get('/strike-summary', strikeController.getStrikeSummary);
 
 router.post('/tasks/:id/complete', async (req, res) => {
   try {
-    const updateData = {status: 'completed', completedAt: new Date().toISOString()};
+    const updateData = { status: 'completed', completedAt: new Date().toISOString() };
     if (req.body && req.body.questionsSolved) {
       updateData.questionsSolved = req.body.questionsSolved;
     }
-    const task = await Task.findByIdAndUpdate(req.params.id, updateData, { returnDocument: 'after' });
-    
+    const task = await Task.findOneAndUpdate({ _id: req.params.id, userId: req.userId }, updateData, { returnDocument: 'after' });
+
     if (task) {
-      const goals = await Goal.find({ status: 'active', category: task.category });
+      const goals = await Goal.find({ userId: req.userId, status: 'active', category: task.category });
       for (const goal of goals) {
         if (task.questionsSolved && (goal.type === 'metric_count' || goal.type === 'task_count')) {
           goal.currentValue += task.questionsSolved;
@@ -281,19 +291,19 @@ router.post('/tasks/:id/complete', async (req, res) => {
         } else {
           continue;
         }
-        
+
         if (goal.currentValue >= goal.targetValue) {
           goal.status = 'achieved';
           await Reward.updateMany(
-            { linkedGoalId: goal._id.toString(), status: 'locked' },
+            { userId: req.userId, linkedGoalId: goal._id.toString(), status: 'locked' },
             { $set: { status: 'unlocked', unlockedAt: new Date().toISOString() } }
           );
         }
         await goal.save();
       }
-      
+
       const todayStr = new Date().toISOString().split('T')[0];
-      let dailyRecord = await DailyRecord.findOne({ date: todayStr });
+      let dailyRecord = await DailyRecord.findOne({ userId: req.userId, date: todayStr });
       if (dailyRecord) {
         if (!dailyRecord.completedTaskIds) dailyRecord.completedTaskIds = [];
         if (!dailyRecord.completedTaskIds.includes(task._id.toString())) {
@@ -302,29 +312,31 @@ router.post('/tasks/:id/complete', async (req, res) => {
         }
       } else {
         await DailyRecord.create({
+          userId: req.userId,
           date: todayStr,
           completedTaskIds: [task._id.toString()],
           status: 'partial'
         });
       }
     }
-    
+
     res.json({ success: true, data: task });
   }
-  catch(e) { res.status(500).json({ success: false, message: e.message }); }
+  catch (e) { res.status(500).json({ success: false, message: e.message }); }
 });
 router.post('/tasks/:id/uncomplete', async (req, res) => {
   try {
-    const task = await Task.findById(req.params.id);
+    const task = await Task.findOne({ _id: req.params.id, userId: req.userId });
     if (!task) return res.status(404).json({ success: false, message: 'Task not found' });
-    
+
     // Reverse goal progress
-    const goals = await Goal.find({ 
+    const goals = await Goal.find({
+      userId: req.userId,
       category: task.category,
       type: { $in: ['task_count', 'metric_count'] },
       status: { $in: ['active', 'achieved', 'completed'] }
     });
-    
+
     for (const goal of goals) {
       if (task.questionsSolved && (goal.type === 'metric_count' || goal.type === 'task_count')) {
         goal.currentValue = Math.max(0, goal.currentValue - task.questionsSolved);
@@ -334,21 +346,21 @@ router.post('/tasks/:id/uncomplete', async (req, res) => {
       if (goal.currentValue < goal.targetValue && (goal.status === 'achieved' || goal.status === 'completed')) {
         goal.status = 'active';
         await Reward.updateMany(
-          { linkedGoalId: goal._id.toString(), status: { $in: ['unlocked', 'redeemed'] } },
+          { userId: req.userId, linkedGoalId: goal._id.toString(), status: { $in: ['unlocked', 'redeemed'] } },
           { $set: { status: 'locked', unlockedAt: null, redeemedAt: null } }
         );
       }
       await goal.save();
     }
-    
+
     // Reverse daily record
     if (task.completedAt) {
       const completedDateStr = task.completedAt.split('T')[0];
-      const dailyRecord = await DailyRecord.findOne({ date: completedDateStr });
+      const dailyRecord = await DailyRecord.findOne({ userId: req.userId, date: completedDateStr });
       if (dailyRecord && dailyRecord.completedTaskIds) {
         dailyRecord.completedTaskIds = dailyRecord.completedTaskIds.filter(id => id !== task._id.toString());
         if (dailyRecord.completedTaskIds.length === 0 && dailyRecord.totalWorkSeconds === 0) {
-           dailyRecord.status = 'no_progress';
+          dailyRecord.status = 'no_progress';
         }
         await dailyRecord.save();
       }
@@ -363,97 +375,96 @@ router.post('/tasks/:id/uncomplete', async (req, res) => {
 
     res.json({ success: true, data: task });
   }
-  catch(e) { res.status(500).json({ success: false, message: e.message }); }
+  catch (e) { res.status(500).json({ success: false, message: e.message }); }
 });
 router.post('/tasks/:id/reschedule', async (req, res) => {
   try {
-    const task = await Task.findById(req.params.id);
+    const task = await Task.findOne({ _id: req.params.id, userId: req.userId });
+    if (!task) return res.status(404).json({ success: false, message: 'Task not found' });
     const historyItem = { originalDueDate: task.scheduledDate || '', rescheduledAt: new Date().toISOString(), newDueDate: req.body.newDate };
     task.scheduledDate = req.body.newDate;
     task.rescheduleCount = (task.rescheduleCount || 0) + 1;
     task.rescheduledHistory.push(historyItem);
     await task.save();
     res.json({ success: true, data: task });
-  } catch(e) { res.status(500).json({ success: false, message: e.message }); }
+  } catch (e) { res.status(500).json({ success: false, message: e.message }); }
 });
 router.get('/projects/:projectId/tasks', async (req, res) => {
-  try { res.json({ success: true, data: await Task.find({projectId: req.params.projectId}) }); }
-  catch(e) { res.status(500).json({ success: false, message: e.message }); }
+  try { res.json({ success: true, data: await Task.find({ projectId: req.params.projectId, userId: req.userId }) }); }
+  catch (e) { res.status(500).json({ success: false, message: e.message }); }
 });
 router.patch('/projects/:id/context', async (req, res) => {
-  try { res.json({ success: true, data: await Project.findByIdAndUpdate(req.params.id, req.body, { returnDocument: 'after' }) }); }
-  catch(e) { res.status(500).json({ success: false, message: e.message }); }
-});
-router.post('/strikes/:id/resolve', async (req, res) => {
-  try { res.json({ success: true, data: await Strike.findByIdAndUpdate(req.params.id, {status: 'resolved', notes: req.body.notes}, { returnDocument: 'after' }) }); }
-  catch(e) { res.status(500).json({ success: false, message: e.message }); }
+  try { res.json({ success: true, data: await Project.findOneAndUpdate({ _id: req.params.id, userId: req.userId }, req.body, { returnDocument: 'after' }) }); }
+  catch (e) { res.status(500).json({ success: false, message: e.message }); }
 });
 
 router.get('/timer/active', async (req, res) => {
-  try { res.json({ success: true, data: await ActiveTimer.findOne() }); }
-  catch(e) { res.status(500).json({ success: false, message: e.message }); }
+  try { res.json({ success: true, data: await ActiveTimer.findOne({ userId: req.userId }) }); }
+  catch (e) { res.status(500).json({ success: false, message: e.message }); }
 });
 router.post('/tasks/:id/timer/start', async (req, res) => {
   try {
-    await ActiveTimer.deleteMany(); 
-    const task = await Task.findById(req.params.id);
-    const timer = await ActiveTimer.create({ taskId: task._id, taskTitle: task.title, projectId: task.projectId, startTime: new Date().toISOString() });
+    await ActiveTimer.deleteMany({ userId: req.userId });
+    const task = await Task.findOne({ _id: req.params.id, userId: req.userId });
+    if (!task) return res.status(404).json({ success: false, message: 'Task not found' });
+    const timer = await ActiveTimer.create({ userId: req.userId, taskId: task._id, taskTitle: task.title, projectId: task.projectId, startTime: new Date().toISOString() });
     res.json({ success: true, data: timer });
-  } catch(e) { res.status(500).json({ success: false, message: e.message }); }
+  } catch (e) { res.status(500).json({ success: false, message: e.message }); }
 });
 router.post('/timer/pause', async (req, res) => {
   try {
-    const timer = await ActiveTimer.findOne();
-    if(timer && timer.status === 'running') {
+    const timer = await ActiveTimer.findOne({ userId: req.userId });
+    if (timer && timer.status === 'running') {
       const diff = Math.floor((new Date() - new Date(timer.startTime)) / 1000);
       timer.accumulatedSeconds += diff;
       timer.status = 'paused';
       await timer.save();
     }
     res.json({ success: true, data: timer });
-  } catch(e) { res.status(500).json({ success: false, message: e.message }); }
+  } catch (e) { res.status(500).json({ success: false, message: e.message }); }
 });
 router.post('/timer/resume', async (req, res) => {
   try {
-    const timer = await ActiveTimer.findOne();
-    if(timer && timer.status === 'paused') {
+    const timer = await ActiveTimer.findOne({ userId: req.userId });
+    if (timer && timer.status === 'paused') {
       timer.startTime = new Date().toISOString();
       timer.status = 'running';
       await timer.save();
     }
     res.json({ success: true, data: timer });
-  } catch(e) { res.status(500).json({ success: false, message: e.message }); }
+  } catch (e) { res.status(500).json({ success: false, message: e.message }); }
 });
 router.post('/timer/stop', async (req, res) => {
   try {
-    const timer = await ActiveTimer.findOne();
-    if(!timer) return res.json({ success: true, data: { session: null, task: null } });
-    
-    let diff = 0;
-    if(timer.status === 'running') diff = Math.floor((new Date() - new Date(timer.startTime)) / 1000);
-    const totalSeconds = timer.accumulatedSeconds + diff;
-    const durationMins = Math.floor(totalSeconds / 60) || 1; 
+    const timer = await ActiveTimer.findOne({ userId: req.userId });
+    if (!timer) return res.json({ success: true, data: { session: null, task: null } });
 
-    const session = await TaskSession.create({ taskId: timer.taskId, taskTitle: timer.taskTitle, startTime: timer.startTime, endTime: new Date().toISOString(), durationMinutes: durationMins });
-    const task = await Task.findByIdAndUpdate(timer.taskId, { $inc: { actualMinutes: durationMins } }, { returnDocument: 'after' });
-    if(timer.projectId) await Project.findByIdAndUpdate(timer.projectId, { $inc: { totalTimeMinutes: durationMins } });
-    
+    let diff = 0;
+    if (timer.status === 'running') diff = Math.floor((new Date() - new Date(timer.startTime)) / 1000);
+    const totalSeconds = timer.accumulatedSeconds + diff;
+    const durationMins = Math.floor(totalSeconds / 60) || 1;
+
+    const session = await TaskSession.create({ userId: req.userId, taskId: timer.taskId, taskTitle: timer.taskTitle, startTime: timer.startTime, endTime: new Date().toISOString(), durationMinutes: durationMins });
+    const task = await Task.findOneAndUpdate({ _id: timer.taskId, userId: req.userId }, { $inc: { actualMinutes: durationMins } }, { returnDocument: 'after' });
+    if (timer.projectId) await Project.findOneAndUpdate({ _id: timer.projectId, userId: req.userId }, { $inc: { totalTimeMinutes: durationMins } });
+
     const todayStr = new Date().toISOString().split('T')[0];
     await DailyRecord.findOneAndUpdate(
-      { date: todayStr },
-      { $inc: { totalWorkSeconds: totalSeconds } }
+      { userId: req.userId, date: todayStr },
+      { $inc: { totalWorkSeconds: totalSeconds } },
+      { upsert: true }
     );
-    
-    await ActiveTimer.deleteMany();
+
+    await ActiveTimer.deleteMany({ userId: req.userId });
     res.json({ success: true, data: { session, task } });
-  } catch(e) { res.status(500).json({ success: false, message: e.message }); }
+  } catch (e) { res.status(500).json({ success: false, message: e.message }); }
 });
 router.get('/tasks/:id/sessions', async (req, res) => {
-  try { res.json({ success: true, data: await TaskSession.find({taskId: req.params.id}) }); }
-  catch(e) { res.status(500).json({ success: false, message: e.message }); }
+  try { res.json({ success: true, data: await TaskSession.find({ taskId: req.params.id, userId: req.userId }) }); }
+  catch (e) { res.status(500).json({ success: false, message: e.message }); }
 });
 
-let lastDailyRolloverDate = null;
+const userRollovers = new Map();
 
 // Lightweight heartbeat ping endpoint
 router.get('/health', (req, res) => res.json({ status: 'ok', timestamp: Date.now() }));
@@ -463,14 +474,16 @@ router.get('/daily/today', async (req, res) => {
     const todayStr = new Date().toISOString().split('T')[0];
     const startOfToday = new Date();
     startOfToday.setHours(0, 0, 0, 0);
-    
-    // Only run past-days evaluation and recurrence rollover once per day to avoid redundant DB overhead
-    if (lastDailyRolloverDate !== todayStr) {
-      await dailyService.evaluatePastDays(7);
 
-      // Roll over all recurring tasks from previous days to today
+    // Only run past-days evaluation and recurrence rollover once per day per user
+    const lastUserRollover = userRollovers.get(req.userId);
+    if (lastUserRollover !== todayStr) {
+      await dailyService.evaluatePastDays(7, req.userId);
+
+      // Roll over all recurring tasks from previous days to today for this user
       await Task.updateMany(
-        { 
+        {
+          userId: req.userId,
           recurrence: { $ne: 'none' },
           scheduledDate: { $lt: todayStr }
         },
@@ -488,6 +501,7 @@ router.get('/daily/today', async (req, res) => {
       // Reset actualMinutes for all incomplete tasks from previous days so today starts fresh
       await Task.updateMany(
         {
+          userId: req.userId,
           status: { $ne: 'completed' },
           updatedAt: { $lt: startOfToday },
           actualMinutes: { $gt: 0 }
@@ -497,7 +511,7 @@ router.get('/daily/today', async (req, res) => {
         }
       );
 
-      lastDailyRolloverDate = todayStr;
+      userRollovers.set(req.userId, todayStr);
     }
 
     const yesterday = new Date(startOfToday);
@@ -518,21 +532,28 @@ router.get('/daily/today', async (req, res) => {
       activeTimer,
       gamification
     ] = await Promise.all([
-      Task.find().lean(),
-      Project.find().lean(),
-      DailyRecord.find().lean(),
-      UserSettings.findOne().lean(),
-      DailyRecord.findOne({ date: yesterdayStr }).lean(),
-      DailyRecord.findOne({ date: todayStr }).lean(),
-      TaskSession.find({ createdAt: { $gte: startOfToday } }).lean(),
-      Strike.countDocuments({ status: 'open' }),
-      Strike.find({ status: 'open' }).sort({ createdAt: -1 }).limit(10).lean(),
-      ActiveTimer.findOne().lean(),
-      Gamification.findOne().lean()
+      Task.find({ userId: req.userId }).lean(),
+      Project.find({ userId: req.userId }).lean(),
+      DailyRecord.find({ userId: req.userId }).lean(),
+      UserSettings.findOne({ userId: req.userId }).lean(),
+      DailyRecord.findOne({ userId: req.userId, date: yesterdayStr }).lean(),
+      DailyRecord.findOne({ userId: req.userId, date: todayStr }).lean(),
+      TaskSession.find({ userId: req.userId, createdAt: { $gte: startOfToday } }).lean(),
+      Strike.countDocuments({ userId: req.userId, status: 'open' }),
+      Strike.find({ userId: req.userId, status: 'open' }).sort({ createdAt: -1 }).limit(10).lean(),
+      ActiveTimer.findOne({ userId: req.userId }).lean(),
+      Gamification.findOne({ userId: req.userId }).lean()
     ]);
 
     const required = tasks.filter(t => t.commitmentLevel === 'required');
-    const optional = tasks.filter(t => t.commitmentLevel !== 'required');
+    const optional = tasks.filter(t => {
+      if (t.commitmentLevel === 'required') return false;
+      // Exclude completed one-time tasks from Today backlog
+      if (t.status === 'completed' && (!t.recurrence || t.recurrence === 'none')) {
+        return false;
+      }
+      return true;
+    });
     const completedRequired = required.filter(t => t.status === 'completed').length;
     const completedOptional = optional.filter(t => t.status === 'completed').length;
     const totalRequired = required.length;
@@ -546,7 +567,7 @@ router.get('/daily/today', async (req, res) => {
 
     if (streakMetrics.longestStreak > (gamification?.longestStreak || 0)) {
       Gamification.findOneAndUpdate(
-        { userId: 'default_user' },
+        { userId: req.userId },
         { $set: { longestStreak: streakMetrics.longestStreak } },
         { upsert: true }
       ).catch(e => console.error('Failed to update longestStreak:', e));
@@ -582,15 +603,15 @@ router.get('/daily/today', async (req, res) => {
         date: todayStr,
         formattedDate: new Date().toDateString(),
         user: { name: settings.userName, timezone: settings.timezone },
-        summary: { 
-          totalRequired, 
-          completedRequired, 
-          remainingRequired: totalRequired - completedRequired, 
-          totalOptional: optional.length, 
-          completedOptional, 
-          completionRate: totalRequired ? Math.round((completedRequired / totalRequired)*100) : 100, 
-          totalTrackedMinutesToday, 
-          currentStrikes: openStrikesCount, 
+        summary: {
+          totalRequired,
+          completedRequired,
+          remainingRequired: totalRequired - completedRequired,
+          totalOptional: optional.length,
+          completedOptional,
+          completionRate: totalRequired ? Math.round((completedRequired / totalRequired) * 100) : 100,
+          totalTrackedMinutesToday,
+          currentStrikes: openStrikesCount,
           currentStreak: streakMetrics.currentStreak,
           longestStreak: streakMetrics.longestStreak
         },
@@ -598,23 +619,25 @@ router.get('/daily/today', async (req, res) => {
         optionalTasks: optional,
         activeTimer,
         yesterday: yesterdayData,
-        projectContexts: projects.map(p => ({ 
-          project: p, 
-          pendingTasks: tasks.filter(t => t.projectId === p._id.toString() && t.status !== 'completed') 
+        projectContexts: projects.map(p => ({
+          project: p,
+          pendingTasks: tasks.filter(t => t.projectId === p._id.toString() && t.status !== 'completed')
         })),
         recentStrikes,
-        noProgressToday: false
+        dailyNote: todayRecord?.dailyNote || '',
+        noProgressToday: todayRecord?.status === 'no_progress'
       }
     });
-  } catch(e) { res.status(500).json({ success: false, message: e.message }); }
+  } catch (e) { res.status(500).json({ success: false, message: e.message }); }
 });
 
 router.post('/daily/today/no-progress', async (req, res) => {
   try {
     const todayStr = new Date().toISOString().split('T')[0];
-    let record = await DailyRecord.findOne({ date: todayStr });
+    let record = await DailyRecord.findOne({ userId: req.userId, date: todayStr });
     if (!record) {
       record = await DailyRecord.create({
+        userId: req.userId,
         date: todayStr,
         status: 'no_progress',
         dailyNote: req.body?.note || 'Break / Rest Day',
@@ -628,35 +651,48 @@ router.post('/daily/today/no-progress', async (req, res) => {
       await record.save();
     }
     res.json({ success: true, data: record });
-  } catch(e) {
+  } catch (e) {
     res.status(500).json({ success: false, message: e.message });
   }
 });
-router.post('/daily/note', (req, res) => res.json({ success: true, data: {} }));
+router.post('/daily/note', async (req, res) => {
+  try {
+    const todayStr = req.body.date || new Date().toISOString().split('T')[0];
+    const note = req.body.note || '';
+    const record = await DailyRecord.findOneAndUpdate(
+      { userId: req.userId, date: todayStr },
+      { $set: { dailyNote: note } },
+      { returnDocument: 'after', upsert: true }
+    );
+    res.json({ success: true, data: record });
+  } catch (e) {
+    res.status(500).json({ success: false, message: e.message });
+  }
+});
 router.get('/daily/yesterday', (req, res) => res.json({ success: true, data: null }));
 
 router.get('/settings', async (req, res) => {
   try {
-    let settings = await UserSettings.findOne();
+    let settings = await UserSettings.findOne({ userId: req.userId });
     if (!settings) {
-      settings = await UserSettings.create({});
+      settings = await UserSettings.create({ userId: req.userId });
     }
     res.json({ success: true, data: settings });
-  } catch(e) {
+  } catch (e) {
     res.status(500).json({ success: false, message: e.message });
   }
 });
 
 router.patch('/settings', async (req, res) => {
   try {
-    let settings = await UserSettings.findOne();
+    let settings = await UserSettings.findOne({ userId: req.userId });
     if (!settings) {
-      settings = new UserSettings();
+      settings = new UserSettings({ userId: req.userId });
     }
     Object.assign(settings, req.body);
     await settings.save();
     res.json({ success: true, data: settings });
-  } catch(e) {
+  } catch (e) {
     res.status(500).json({ success: false, message: e.message });
   }
 });
@@ -684,13 +720,13 @@ router.get('/analytics', async (req, res) => {
     const prevStartDateStr = formatLocalDate(prevStartDate);
 
     const [tasks, allSessions, dailyRecords, strikes, goals, projects, gamification] = await Promise.all([
-      Task.find().lean(),
-      TaskSession.find().lean(),
-      DailyRecord.find().sort({ date: 1 }).lean(),
-      Strike.find().sort({ createdAt: -1 }).lean(),
-      Goal.find().lean(),
-      Project.find().lean(),
-      Gamification.findOne().lean()
+      Task.find({ userId: req.userId }).lean(),
+      TaskSession.find({ userId: req.userId }).lean(),
+      DailyRecord.find({ userId: req.userId }).sort({ date: 1 }).lean(),
+      Strike.find({ userId: req.userId }).sort({ createdAt: -1 }).lean(),
+      Goal.find({ userId: req.userId }).lean(),
+      Project.find({ userId: req.userId }).lean(),
+      Gamification.findOne({ userId: req.userId }).lean()
     ]);
 
     // Filter sessions by period
@@ -791,6 +827,22 @@ router.get('/analytics', async (req, res) => {
       const completedRequiredCount = allPlannedReq.filter(id => compIds.includes(id)).length;
       const totalRequiredCount = allPlannedReq.length;
 
+      const isTodayDate = dateStr === formatLocalDate(now);
+      let dayStatus = record?.status;
+      if (!dayStatus) {
+        if (isTodayDate) {
+          if (totalRequiredCount > 0 && completedRequiredCount >= totalRequiredCount) {
+            dayStatus = 'completed';
+          } else if (completedRequiredCount > 0 || finalMins > 0) {
+            dayStatus = 'partial';
+          } else {
+            dayStatus = 'in_progress';
+          }
+        } else {
+          dayStatus = finalMins > 0 ? 'partial' : 'no_progress';
+        }
+      }
+
       dailyWorkHistory.push({
         date: dateStr,
         day: dayName,
@@ -798,7 +850,7 @@ router.get('/analytics', async (req, res) => {
         minutes: finalMins,
         requiredCount: totalRequiredCount,
         completedCount: completedRequiredCount,
-        status: record?.status || (finalMins > 0 ? 'partial' : 'no_progress')
+        status: dayStatus
       });
     }
 
@@ -1055,7 +1107,7 @@ router.get('/analytics', async (req, res) => {
         }
       }
     });
-  } catch(e) {
+  } catch (e) {
     res.status(500).json({ success: false, message: e.message });
   }
 });

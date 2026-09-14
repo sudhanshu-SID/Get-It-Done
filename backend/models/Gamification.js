@@ -3,7 +3,9 @@ const mongoose = require('mongoose');
 const GamificationSchema = new mongoose.Schema({
   userId: {
     type: String,
-    default: 'default_user' // Hardcoded for MVP since no auth yet
+    required: true,
+    index: true,
+    unique: true
   },
   currentStrikes: {
     type: Number,

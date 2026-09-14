@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 
 const StrikeSchema = new mongoose.Schema({
+  userId: { type: String, required: true, index: true },
   number: { type: Number, required: true },
   reason: { type: String, required: true },
   date: String,

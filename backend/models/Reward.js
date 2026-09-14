@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 
 const RewardSchema = new mongoose.Schema({
+  userId: { type: String, required: true, index: true },
   title: { type: String, required: true },
   description: String,
   requirement: String,

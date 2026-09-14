@@ -113,27 +113,24 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ analytic
             <button
               onClick={() => fetchPeriodData(7)}
               disabled={isRefreshing}
-              className={`px-3 py-1 transition-colors cursor-pointer ${
-                periodDays === 7 ? 'bg-[#141414] text-white' : 'text-[#141414] hover:bg-neutral-200'
-              }`}
+              className={`px-3 py-1 transition-colors cursor-pointer ${periodDays === 7 ? 'bg-[#141414] text-white' : 'text-[#141414] hover:bg-neutral-200'
+                }`}
             >
               7 Days
             </button>
             <button
               onClick={() => fetchPeriodData(14)}
               disabled={isRefreshing}
-              className={`px-3 py-1 transition-colors cursor-pointer ${
-                periodDays === 14 ? 'bg-[#141414] text-white' : 'text-[#141414] hover:bg-neutral-200'
-              }`}
+              className={`px-3 py-1 transition-colors cursor-pointer ${periodDays === 14 ? 'bg-[#141414] text-white' : 'text-[#141414] hover:bg-neutral-200'
+                }`}
             >
               14 Days
             </button>
             <button
               onClick={() => fetchPeriodData(30)}
               disabled={isRefreshing}
-              className={`px-3 py-1 transition-colors cursor-pointer ${
-                periodDays === 30 ? 'bg-[#141414] text-white' : 'text-[#141414] hover:bg-neutral-200'
-              }`}
+              className={`px-3 py-1 transition-colors cursor-pointer ${periodDays === 30 ? 'bg-[#141414] text-white' : 'text-[#141414] hover:bg-neutral-200'
+                }`}
             >
               30 Days
             </button>
@@ -143,33 +140,29 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ analytic
           <div className="flex border-2 border-[#141414] bg-white p-0.5 text-xs font-mono uppercase font-bold">
             <button
               onClick={() => setActiveView('retrospective')}
-              className={`px-3 py-1 transition-colors cursor-pointer ${
-                activeView === 'retrospective' ? 'bg-[#141414] text-white' : 'text-[#141414] hover:bg-neutral-200'
-              }`}
+              className={`px-3 py-1 transition-colors cursor-pointer ${activeView === 'retrospective' ? 'bg-[#141414] text-white' : 'text-[#141414] hover:bg-neutral-200'
+                }`}
             >
               Retrospective
             </button>
             <button
               onClick={() => setActiveView('categories')}
-              className={`px-3 py-1 transition-colors cursor-pointer ${
-                activeView === 'categories' ? 'bg-[#141414] text-white' : 'text-[#141414] hover:bg-neutral-200'
-              }`}
+              className={`px-3 py-1 transition-colors cursor-pointer ${activeView === 'categories' ? 'bg-[#141414] text-white' : 'text-[#141414] hover:bg-neutral-200'
+                }`}
             >
               Fields & Allocation
             </button>
             <button
               onClick={() => setActiveView('dsa')}
-              className={`px-3 py-1 transition-colors cursor-pointer ${
-                activeView === 'dsa' ? 'bg-[#141414] text-white' : 'text-[#141414] hover:bg-neutral-200'
-              }`}
+              className={`px-3 py-1 transition-colors cursor-pointer ${activeView === 'dsa' ? 'bg-[#141414] text-white' : 'text-[#141414] hover:bg-neutral-200'
+                }`}
             >
               DSA Velocity
             </button>
             <button
               onClick={() => setActiveView('estimation')}
-              className={`px-3 py-1 transition-colors cursor-pointer ${
-                activeView === 'estimation' ? 'bg-[#141414] text-white' : 'text-[#141414] hover:bg-neutral-200'
-              }`}
+              className={`px-3 py-1 transition-colors cursor-pointer ${activeView === 'estimation' ? 'bg-[#141414] text-white' : 'text-[#141414] hover:bg-neutral-200'
+                }`}
             >
               Est. vs Actual
             </button>
@@ -196,9 +189,8 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ analytic
               {formatMinutes(analytics.totalMinutes)}
             </div>
             {percentChange !== 0 && (
-              <span className={`text-[11px] font-mono font-bold flex items-center ${
-                percentChange > 0 ? 'text-green-700' : 'text-red-600'
-              }`}>
+              <span className={`text-[11px] font-mono font-bold flex items-center ${percentChange > 0 ? 'text-green-700' : 'text-red-600'
+                }`}>
                 {percentChange > 0 ? <ArrowUpRight className="h-3 w-3 inline" /> : <ArrowDownRight className="h-3 w-3 inline" />}
                 {percentChange > 0 ? `+${percentChange}%` : `${percentChange}%`}
               </span>
@@ -219,9 +211,8 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ analytic
             <div className={`text-2xl font-black font-mono ${disciplineColor}`}>
               {disciplineRate}%
             </div>
-            <span className={`text-[10px] font-mono font-black uppercase px-1.5 py-0.5 border border-[#141414] ${
-              disciplineTier === 'ELITE' ? 'bg-green-100 text-green-900' : disciplineTier === 'SOLID' ? 'bg-[#E4E3E0]' : 'bg-red-100 text-red-900'
-            }`}>
+            <span className={`text-[10px] font-mono font-black uppercase px-1.5 py-0.5 border border-[#141414] ${disciplineTier === 'ELITE' ? 'bg-green-100 text-green-900' : disciplineTier === 'SOLID' ? 'bg-[#E4E3E0]' : 'bg-red-100 text-red-900'
+              }`}>
               {disciplineTier}
             </span>
           </div>
@@ -257,9 +248,8 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ analytic
             <AlertTriangle className="h-4 w-4" />
           </div>
           <div className="flex items-baseline gap-2">
-            <div className={`text-2xl font-black font-mono ${
-              (analytics.strikeHistory?.open || 0) > 0 ? 'text-red-600' : 'text-green-700'
-            }`}>
+            <div className={`text-2xl font-black font-mono ${(analytics.strikeHistory?.open || 0) > 0 ? 'text-red-600' : 'text-green-700'
+              }`}>
               {analytics.strikeHistory?.open || 0}
             </div>
             <span className="text-xs opacity-60 font-mono font-normal">
@@ -388,9 +378,9 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ analytic
                 const isBreak = day.status === 'no_progress';
                 const isAllMet = day.requiredCount > 0 && day.completedCount >= day.requiredCount;
                 const isPartial = day.requiredCount > 0 && day.completedCount > 0 && day.completedCount < day.requiredCount;
-                const isMissed = day.requiredCount > 0 && day.completedCount === 0 && !isBreak;
+                const isMissed = !isToday && day.requiredCount > 0 && day.completedCount === 0 && !isBreak;
                 const isFreeWork = day.requiredCount === 0 && day.minutes > 0;
-                const isZero = day.minutes === 0 && !isBreak;
+                const isInProgress = isToday && !isBreak && !isAllMet;
 
                 // Color coding per day outcome
                 let barColor = 'bg-neutral-200 opacity-60';
@@ -404,12 +394,14 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ analytic
                   barColor = 'bg-rose-400 hover:bg-rose-500';
                 } else if (isFreeWork) {
                   barColor = 'bg-indigo-400 hover:bg-indigo-500';
+                } else if (isInProgress) {
+                  barColor = 'bg-neutral-300 hover:bg-neutral-400';
                 }
 
                 return (
                   <div key={day.date} className="flex flex-col items-center h-full justify-end group min-w-[28px]">
                     <span className="text-[9px] font-mono mb-1 opacity-0 group-hover:opacity-100 transition-opacity font-bold truncate">
-                      {isBreak ? 'Break' : day.minutes > 0 ? formatMinutes(day.minutes) : '0m'}
+                      {isBreak ? 'Break' : day.minutes > 0 ? formatMinutes(day.minutes) : isToday ? 'In Progress' : '0m'}
                     </span>
                     <div
                       className={`w-full max-w-[36px] transition-all duration-300 border border-[#141414] ${barColor} ${
@@ -426,9 +418,9 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ analytic
                       </span>
                     ) : (
                       <span className={`text-[8px] font-mono font-bold ${
-                        day.requiredCount > 0 && day.completedCount < day.requiredCount ? 'text-rose-600' : 'opacity-60'
+                        !isToday && day.requiredCount > 0 && day.completedCount < day.requiredCount ? 'text-rose-600' : 'opacity-60'
                       }`}>
-                        {day.requiredCount > 0 ? `${day.completedCount}/${day.requiredCount}` : '—'}
+                        {day.requiredCount > 0 ? `${day.completedCount}/${day.requiredCount}` : (isToday ? '0/0' : '—')}
                       </span>
                     )}
                   </div>
@@ -509,13 +501,12 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ analytic
                     </div>
                     <div className="h-2 w-full border border-[#141414] bg-[#E4E3E0] overflow-hidden">
                       <div
-                        className={`h-full transition-all duration-500 ${
-                          cat.health === 'excelling'
+                        className={`h-full transition-all duration-500 ${cat.health === 'excelling'
                             ? 'bg-emerald-500'
                             : cat.health === 'needs_attention'
-                            ? 'bg-amber-400'
-                            : 'bg-indigo-500'
-                        }`}
+                              ? 'bg-amber-400'
+                              : 'bg-indigo-500'
+                          }`}
                         style={{ width: `${cat.percentage}%` }}
                       />
                     </div>
@@ -527,13 +518,12 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ analytic
                   </div>
 
                   <div className="col-span-2 text-right">
-                    <span className={`text-[10px] font-mono font-black uppercase px-2 py-0.5 border border-[#141414] ${
-                      cat.health === 'excelling'
+                    <span className={`text-[10px] font-mono font-black uppercase px-2 py-0.5 border border-[#141414] ${cat.health === 'excelling'
                         ? 'bg-green-100 text-green-900'
                         : cat.health === 'needs_attention'
-                        ? 'bg-amber-100 text-amber-900'
-                        : 'bg-[#E4E3E0] text-neutral-900'
-                    }`}>
+                          ? 'bg-amber-100 text-amber-900'
+                          : 'bg-[#E4E3E0] text-neutral-900'
+                      }`}>
                       {cat.health === 'excelling' ? 'EXCELLING' : cat.health === 'needs_attention' ? 'NEEDS FOCUS' : 'ON TRACK'}
                     </span>
                   </div>
@@ -644,9 +634,8 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ analytic
               </div>
               {analytics.estimationMetrics && analytics.estimatedVsActual.length > 0 && (
                 <div className="text-right">
-                  <span className={`text-xs font-mono font-bold ${
-                    analytics.estimationMetrics.avgVarianceMinutes > 15 ? 'text-red-600' : 'text-green-700'
-                  }`}>
+                  <span className={`text-xs font-mono font-bold ${analytics.estimationMetrics.avgVarianceMinutes > 15 ? 'text-red-600' : 'text-green-700'
+                    }`}>
                     Avg Drift: {analytics.estimationMetrics.avgVarianceMinutes > 0 ? `+${analytics.estimationMetrics.avgVarianceMinutes}m` : `${analytics.estimationMetrics.avgVarianceMinutes}m`}
                   </span>
                 </div>
@@ -675,9 +664,8 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ analytic
                     <span className="col-span-2 opacity-75">{item.estimatedMinutes}m</span>
                     <span className="col-span-2 opacity-75">{item.actualMinutes}m</span>
                     <span
-                      className={`col-span-2 text-right font-bold ${
-                        item.differenceMinutes > 0 ? 'text-red-600' : item.differenceMinutes < 0 ? 'text-green-700' : 'opacity-60'
-                      }`}
+                      className={`col-span-2 text-right font-bold ${item.differenceMinutes > 0 ? 'text-red-600' : item.differenceMinutes < 0 ? 'text-green-700' : 'opacity-60'
+                        }`}
                     >
                       {item.differenceMinutes > 0 ? `+${item.differenceMinutes}m` : `${item.differenceMinutes}m`}
                     </span>

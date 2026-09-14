@@ -2,19 +2,27 @@ import React, { useEffect, useState } from 'react';
 import { StickyNote } from './StickyNote';
 import { Note } from '../../types';
 import { apiService } from '../../services/api';
+import { useAuth } from '../../context/AuthContext';
 import { Plus } from 'lucide-react';
 
 interface StickyBoardProps {
   projectId?: string; // If undefined, it acts as the Today board
+  onRequireAuth?: () => void;
 }
 
-export const StickyBoard: React.FC<StickyBoardProps> = ({ projectId }) => {
+export const StickyBoard: React.FC<StickyBoardProps> = ({ projectId, onRequireAuth }) => {
+  const { isAuthenticated } = useAuth();
   const [notes, setNotes] = useState<Note[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
+    if (!isAuthenticated) {
+      setNotes([]);
+      setIsLoading(false);
+      return;
+    }
     fetchNotes();
-  }, [projectId]);
+  }, [projectId, isAuthenticated]);
 
   const fetchNotes = async () => {
     try {
@@ -29,6 +37,10 @@ export const StickyBoard: React.FC<StickyBoardProps> = ({ projectId }) => {
   };
 
   const handleAddNote = async () => {
+    if (!isAuthenticated) {
+      if (onRequireAuth) onRequireAuth();
+      return;
+    }
     try {
       const newNote = await apiService.createNote({
         content: '',

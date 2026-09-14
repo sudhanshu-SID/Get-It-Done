@@ -30,17 +30,26 @@ function notifyStatus(status: BackendStatus) {
   statusListeners.forEach(l => l(status));
 }
 
+import { authService } from './auth/firebaseAuthService';
+
 async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
   const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
   const fullUrl = url.startsWith("http") ? url : `${baseUrl}${url}`;
   
   try {
+    const token = await authService.getIdToken();
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      ...(options?.headers as Record<string, string> || {}),
+    };
+
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
     const res = await fetch(fullUrl, {
       ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        ...options?.headers
-      }
+      headers
     });
 
     const json = await res.json();

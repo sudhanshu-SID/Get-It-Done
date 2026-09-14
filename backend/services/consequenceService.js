@@ -36,9 +36,11 @@ class ConsequenceService {
     return Consequence.findByIdAndDelete(id);
   }
 
-  async resolveConsequence(id) {
+  async resolveConsequence(id, userId) {
     checkDB();
-    const consequence = await Consequence.findById(id);
+    const query = { _id: id };
+    if (userId) query.userId = userId;
+    const consequence = await Consequence.findOne(query);
     if (!consequence) return null;
 
     consequence.status = 'resolved';
@@ -49,8 +51,10 @@ class ConsequenceService {
       const match = consequence.trigger ? consequence.trigger.match(/(\d+)/) : null;
       const triggerStrikes = match ? parseInt(match[1], 10) : 10;
 
-      // Find the oldest open strikes up to trigger threshold
-      const openStrikes = await Strike.find({ status: 'open' })
+      // Find the oldest open strikes up to trigger threshold for this user
+      const strikeQuery = { status: 'open' };
+      if (userId) strikeQuery.userId = userId;
+      const openStrikes = await Strike.find(strikeQuery)
         .sort({ number: 1 })
         .limit(triggerStrikes);
 
@@ -65,7 +69,7 @@ class ConsequenceService {
           }
         );
 
-        let gamification = await Gamification.findOne();
+        let gamification = await Gamification.findOne(userId ? { userId } : {});
         if (gamification) {
           gamification.currentStrikes = Math.max(0, (gamification.currentStrikes || 0) - resolvedStrikesCount);
           await gamification.save();
@@ -77,7 +81,7 @@ class ConsequenceService {
     await consequence.save();
 
     if (consequence.type === 'financial') {
-      const gamification = await Gamification.findOne();
+      const gamification = await Gamification.findOne(userId ? { userId } : {});
       if (gamification) {
         const numericValue = parseFloat(String(consequence.value || '0').replace(/[^0-9.]/g, '')) || 0;
         gamification.monetaryPenaltyOwed = Math.max(0, (gamification.monetaryPenaltyOwed || 0) - numericValue);
@@ -90,6 +94,7 @@ class ConsequenceService {
       action: 'consequence_resolved',
       message: `Penalty served: "${consequence.title}". Automatically resolved ${resolvedStrikesCount} strikes.`,
       metadata: { consequenceId: consequence._id, strikesResolved: resolvedStrikesCount },
+      ...(userId ? { userId } : {})
     });
     
     return consequence;

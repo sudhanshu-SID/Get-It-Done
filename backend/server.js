@@ -11,7 +11,9 @@ app.use(cors());
 app.use(express.json());
 
 // API Routes Hub
+const authRoutes = require('./routes/auth');
 const apiRoutes = require('./routes/index');
+app.use('/api/auth', authRoutes);
 app.use('/api', apiRoutes);
 
 // Database Connection
