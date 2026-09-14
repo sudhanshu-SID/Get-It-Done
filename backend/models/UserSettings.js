@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 
 const UserSettingsSchema = new mongoose.Schema({
+  userId: { type: String, required: true, index: true, unique: true },
   userName: { type: String, default: 'Commander' },
   timezone: { type: String, default: 'UTC' },
   defaultTaskDuration: { type: Number, default: 45 },

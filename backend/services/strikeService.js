@@ -11,18 +11,21 @@ class StrikeService {
   async getStrikes(filters = {}) {
     checkDB();
     const query = {};
+    if (filters.userId) query.userId = filters.userId;
     if (filters.status) query.status = filters.status;
     return Strike.find(query).sort({ number: -1 }).populate('taskId').populate('goalId').populate('consequenceId');
   }
 
-  async getStrikeById(id) {
+  async getStrikeById(id, userId) {
     checkDB();
-    return Strike.findById(id).populate('taskId').populate('goalId').populate('consequenceId');
+    const query = { _id: id };
+    if (userId) query.userId = userId;
+    return Strike.findOne(query).populate('taskId').populate('goalId').populate('consequenceId');
   }
 
   async createStrike(data) {
     checkDB();
-    const lastStrike = await Strike.findOne().sort({ number: -1 });
+    const lastStrike = await Strike.findOne(data.userId ? { userId: data.userId } : {}).sort({ number: -1 });
     const number = (lastStrike?.number || 0) + 1;
     
     const strike = new Strike({
@@ -32,13 +35,14 @@ class StrikeService {
     
     const saved = await strike.save();
     
-    const gamification = await Gamification.findOne();
+    const gamification = await Gamification.findOne(data.userId ? { userId: data.userId } : {});
     if (gamification) {
       gamification.currentStrikes += 1;
       await gamification.save();
     }
     
     await AccountabilityLog.create({
+      userId: data.userId,
       source: 'system',
       action: 'strike_created',
       message: `Strike #${number} created: ${strike.reason}`,
@@ -47,34 +51,39 @@ class StrikeService {
       metadata: { strikeId: saved._id },
     });
     
-    await this.checkAndTriggerConsequences(gamification?.currentStrikes || number);
+    await this.checkAndTriggerConsequences(gamification?.currentStrikes || number, data.userId);
     
     await saved.populate(['taskId', 'goalId', 'consequenceId']);
     return saved;
   }
 
-  async updateStrike(id, data) {
+  async updateStrike(id, data, userId) {
     checkDB();
-    return Strike.findByIdAndUpdate(id, data, { returnDocument: 'after', runValidators: true })
+    const query = { _id: id };
+    if (userId) query.userId = userId;
+    return Strike.findOneAndUpdate(query, data, { returnDocument: 'after', runValidators: true })
       .populate('taskId').populate('goalId').populate('consequenceId');
   }
 
-  async resolveStrike(id) {
+  async resolveStrike(id, userId) {
     checkDB();
-    const strike = await Strike.findByIdAndUpdate(
-      id,
+    const query = { _id: id };
+    if (userId) query.userId = userId;
+    const strike = await Strike.findOneAndUpdate(
+      query,
       { status: 'resolved' },
       { returnDocument: 'after' }
     ).populate('taskId').populate('goalId').populate('consequenceId');
     
     if (strike) {
-      const gamification = await Gamification.findOne();
+      const gamification = await Gamification.findOne(userId ? { userId } : {});
       if (gamification) {
         gamification.currentStrikes = Math.max(0, gamification.currentStrikes - 1);
         await gamification.save();
       }
       
       await AccountabilityLog.create({
+        userId: strike.userId,
         source: 'user',
         action: 'strike_resolved',
         message: `Strike #${strike.number} resolved`,
@@ -86,22 +95,25 @@ class StrikeService {
     return strike;
   }
 
-  async dismissStrike(id) {
+  async dismissStrike(id, userId) {
     checkDB();
-    const strike = await Strike.findByIdAndUpdate(
-      id,
+    const query = { _id: id };
+    if (userId) query.userId = userId;
+    const strike = await Strike.findOneAndUpdate(
+      query,
       { status: 'dismissed' },
       { returnDocument: 'after' }
     ).populate('taskId').populate('goalId').populate('consequenceId');
     
     if (strike) {
-      const gamification = await Gamification.findOne();
+      const gamification = await Gamification.findOne(userId ? { userId } : {});
       if (gamification) {
         gamification.currentStrikes = Math.max(0, gamification.currentStrikes - 1);
         await gamification.save();
       }
       
       await AccountabilityLog.create({
+        userId: strike.userId,
         source: 'user',
         action: 'strike_dismissed',
         message: `Strike #${strike.number} dismissed`,
@@ -113,17 +125,20 @@ class StrikeService {
     return strike;
   }
 
-  async deleteStrike(id) {
+  async deleteStrike(id, userId) {
     checkDB();
-    const strike = await Strike.findByIdAndDelete(id);
+    const query = { _id: id };
+    if (userId) query.userId = userId;
+    const strike = await Strike.findOneAndDelete(query);
     if (strike && strike.status !== 'resolved' && strike.status !== 'dismissed') {
-      const gamification = await Gamification.findOne();
+      const gamification = await Gamification.findOne(userId ? { userId } : {});
       if (gamification) {
         gamification.currentStrikes = Math.max(0, gamification.currentStrikes - 1);
         await gamification.save();
       }
       
       await AccountabilityLog.create({
+        userId: strike.userId,
         source: 'user',
         action: 'strike_deleted',
         message: `Strike #${strike.number} deleted manually`,
@@ -134,10 +149,11 @@ class StrikeService {
     return strike;
   }
 
-  async getStrikeSummary() {
+  async getStrikeSummary(userId) {
     checkDB();
-    const strikes = await Strike.find().sort({ number: -1 });
-    const gamification = await Gamification.findOne();
+    const query = userId ? { userId } : {};
+    const strikes = await Strike.find(query).sort({ number: -1 });
+    const gamification = await Gamification.findOne(query);
     
     return {
       currentStrikes: gamification?.currentStrikes || 0,
@@ -150,15 +166,19 @@ class StrikeService {
     };
   }
 
-  async checkAndTriggerConsequences(totalStrikes) {
+  async checkAndTriggerConsequences(totalStrikes, userId) {
     checkDB();
-    const consequences = await Consequence.find({ status: 'pending' });
+    const query = { status: 'pending' };
+    if (userId) query.userId = userId;
+    const consequences = await Consequence.find(query);
     if (!consequences || consequences.length === 0) return;
 
     let strikesCount = totalStrikes;
     if (strikesCount === undefined || strikesCount === null) {
-      const openCount = await Strike.countDocuments({ status: 'open' });
-      const lastStrike = await Strike.findOne().sort({ number: -1 });
+      const strikeQuery = { status: 'open' };
+      if (userId) strikeQuery.userId = userId;
+      const openCount = await Strike.countDocuments(strikeQuery);
+      const lastStrike = await Strike.findOne(userId ? { userId } : {}).sort({ number: -1 });
       const totalCount = lastStrike?.number || 0;
       strikesCount = Math.max(openCount, totalCount);
     }
@@ -178,9 +198,9 @@ class StrikeService {
           }
           await consequence.save();
           
-          let gamification = await Gamification.findOne();
+          let gamification = await Gamification.findOne(userId ? { userId } : {});
           if (!gamification) {
-            gamification = new Gamification({ userId: 'default_user', currentStrikes: strikesCount });
+            gamification = new Gamification({ userId: userId || 'default_user', currentStrikes: strikesCount });
           }
           if (consequence.type === 'financial') {
             const numericValue = parseFloat(String(consequence.value || '0').replace(/[^0-9.]/g, '')) || 0;
@@ -193,6 +213,7 @@ class StrikeService {
             action: 'consequence_triggered',
             message: `Consequence triggered by strike #${strikesCount}: ${consequence.title} (${consequence.trigger})`,
             metadata: { consequenceId: consequence._id, strikesCount },
+            ...(userId ? { userId } : {})
           });
         }
       }

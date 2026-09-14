@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 
 const DailyRecordSchema = new mongoose.Schema({
+  userId: { type: String, required: true, index: true },
   date: { type: String, required: true },
   timezone: String,
   requiredTaskIds: [String],

@@ -7,7 +7,7 @@ const handleError = (res, error, defaultMessage = 'Server Error') => {
 
 exports.getStrikes = async (req, res) => {
   try {
-    const filters = { status: req.query.status };
+    const filters = { status: req.query.status, userId: req.userId };
     const strikes = await strikeService.getStrikes(filters);
     res.json({ success: true, data: strikes });
   } catch (error) {
@@ -17,7 +17,7 @@ exports.getStrikes = async (req, res) => {
 
 exports.getStrikeById = async (req, res) => {
   try {
-    const strike = await strikeService.getStrikeById(req.params.id);
+    const strike = await strikeService.getStrikeById(req.params.id, req.userId);
     if (!strike) return res.status(404).json({ success: false, message: 'Strike not found' });
     res.json({ success: true, data: strike });
   } catch (error) {
@@ -27,7 +27,7 @@ exports.getStrikeById = async (req, res) => {
 
 exports.createStrike = async (req, res) => {
   try {
-    const strike = await strikeService.createStrike(req.body);
+    const strike = await strikeService.createStrike({ ...req.body, userId: req.userId });
     res.status(201).json({ success: true, data: strike });
   } catch (error) {
     handleError(res, error, 'Failed to create strike');
@@ -36,7 +36,7 @@ exports.createStrike = async (req, res) => {
 
 exports.updateStrike = async (req, res) => {
   try {
-    const strike = await strikeService.updateStrike(req.params.id, req.body);
+    const strike = await strikeService.updateStrike(req.params.id, req.body, req.userId);
     if (!strike) return res.status(404).json({ success: false, message: 'Strike not found' });
     res.json({ success: true, data: strike });
   } catch (error) {
@@ -46,7 +46,7 @@ exports.updateStrike = async (req, res) => {
 
 exports.resolveStrike = async (req, res) => {
   try {
-    const strike = await strikeService.resolveStrike(req.params.id);
+    const strike = await strikeService.resolveStrike(req.params.id, req.userId);
     if (!strike) return res.status(404).json({ success: false, message: 'Strike not found' });
     res.json({ success: true, data: strike });
   } catch (error) {
@@ -56,7 +56,7 @@ exports.resolveStrike = async (req, res) => {
 
 exports.dismissStrike = async (req, res) => {
   try {
-    const strike = await strikeService.dismissStrike(req.params.id);
+    const strike = await strikeService.dismissStrike(req.params.id, req.userId);
     if (!strike) return res.status(404).json({ success: false, message: 'Strike not found' });
     res.json({ success: true, data: strike });
   } catch (error) {
@@ -66,7 +66,7 @@ exports.dismissStrike = async (req, res) => {
 
 exports.deleteStrike = async (req, res) => {
   try {
-    const strike = await strikeService.deleteStrike(req.params.id);
+    const strike = await strikeService.deleteStrike(req.params.id, req.userId);
     if (!strike) return res.status(404).json({ success: false, message: 'Strike not found' });
     res.json({ success: true, data: { message: 'Deleted successfully' } });
   } catch (error) {
@@ -76,7 +76,7 @@ exports.deleteStrike = async (req, res) => {
 
 exports.getStrikeSummary = async (req, res) => {
   try {
-    const summary = await strikeService.getStrikeSummary();
+    const summary = await strikeService.getStrikeSummary(req.userId);
     res.json({ success: true, data: summary });
   } catch (error) {
     handleError(res, error, 'Failed to fetch strike summary');

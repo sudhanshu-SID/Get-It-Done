@@ -24,3 +24,9 @@ Single-context repository. See `docs/agents/domain.md`.
 - Before modifying code or running mutating commands, always discuss the proposed plan and explain what needs to be changed and why.
 - Explicitly list and highlight potential edge cases upfront (e.g. data desync, race conditions, partial failures, cascading deletes, user typos, backwards compatibility) to build shared intuition.
 - Wait for user alignment on the approach before touching any code.
+
+### Scope Discipline & Minimal Necessary Changes
+
+- Only change, update, add, or delete the strictly necessary code required for the current task. Avoid speculative refactoring or unrequested edits.
+- If you conceive an idea, optimization, or potential new feature while writing or modifying code, do NOT implement it silently. Proactively discuss it with the user first, evaluate trade-offs, and align before expanding scope, keeping the codebase clean and maintainable.
+

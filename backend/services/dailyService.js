@@ -9,30 +9,35 @@ const checkDB = () => {
 };
 
 class DailyService {
-  async getTodayRecord() {
+  async getTodayRecord(userId) {
     checkDB();
     const today = startOfDay(new Date());
     const todayStr = format(today, 'yyyy-MM-dd');
-    let record = await DailyRecord.findOne({ date: todayStr });
+    const query = { date: todayStr };
+    if (userId) query.userId = userId;
+    let record = await DailyRecord.findOne(query);
     
     if (!record) {
-      record = await this.createTodayRecord();
+      record = await this.createTodayRecord(userId);
     }
     
     return record;
   }
 
-  async createTodayRecord() {
+  async createTodayRecord(userId) {
     checkDB();
     const today = startOfDay(new Date());
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
     const todayStr = format(today, 'yyyy-MM-dd');
     
-    const tasks = await Task.find({
+    const taskQuery = {
       scheduledDate: todayStr,
       status: { $ne: 'completed' },
-    });
+    };
+    if (userId) taskQuery.userId = userId;
+
+    const tasks = await Task.find(taskQuery);
     
     const requiredTaskIds = tasks
       .filter(t => t.commitmentLevel === 'required')
@@ -42,7 +47,7 @@ class DailyService {
       .filter(t => t.commitmentLevel === 'optional')
       .map(t => t._id);
     
-    const user = await User.findOne();
+    const user = await User.findOne(userId ? { firebaseUid: userId } : {});
     const timezone = user?.timezone || 'UTC';
     
     const record = new DailyRecord({
@@ -55,42 +60,51 @@ class DailyService {
       missedTaskIds: [],
       totalWorkSeconds: 0,
       status: 'partial',
+      ...(userId ? { userId } : {})
     });
     
     return record.save();
   }
 
-  async getYesterdayRecord() {
+  async getYesterdayRecord(userId) {
     checkDB();
     const yesterday = startOfDay(subDays(new Date(), 1));
     const yesterdayStr = format(yesterday, 'yyyy-MM-dd');
-    return DailyRecord.findOne({ date: yesterdayStr });
+    const query = { date: yesterdayStr };
+    if (userId) query.userId = userId;
+    return DailyRecord.findOne(query);
   }
 
-  async getRecordByDate(date) {
+  async getRecordByDate(date, userId) {
     checkDB();
     const day = startOfDay(new Date(date));
     const dayStr = format(day, 'yyyy-MM-dd');
-    return DailyRecord.findOne({ date: dayStr });
+    const query = { date: dayStr };
+    if (userId) query.userId = userId;
+    return DailyRecord.findOne(query);
   }
 
-  async getRecordsForRange(startDate, endDate) {
+  async getRecordsForRange(startDate, endDate, userId) {
     checkDB();
     const start = startOfDay(new Date(startDate));
     const end = endOfDay(new Date(endDate));
     const startStr = format(start, 'yyyy-MM-dd');
     const endStr = format(end, 'yyyy-MM-dd');
-    return DailyRecord.find({ date: { $gte: startStr, $lte: endStr } }).sort({ date: -1 });
+    const query = { date: { $gte: startStr, $lte: endStr } };
+    if (userId) query.userId = userId;
+    return DailyRecord.find(query).sort({ date: -1 });
   }
 
-  async markNoProgressToday() {
+  async markNoProgressToday(userId) {
     checkDB();
     const today = startOfDay(new Date());
     const todayStr = format(today, 'yyyy-MM-dd');
-    let record = await DailyRecord.findOne({ date: todayStr });
+    const query = { date: todayStr };
+    if (userId) query.userId = userId;
+    let record = await DailyRecord.findOne(query);
     
     if (!record) {
-      record = await this.createTodayRecord();
+      record = await this.createTodayRecord(userId);
     }
     
     record.status = 'no_progress';
@@ -99,27 +113,30 @@ class DailyService {
     record.dailyNote = record.dailyNote || 'No progress recorded';
     await record.save();
     
-    await this.evaluateCommitments(record);
+    await this.evaluateCommitments(record, userId);
     
     return record;
   }
 
-  async updateRecord(date, data) {
+  async updateRecord(date, data, userId) {
     checkDB();
     const day = startOfDay(new Date(date));
     const dayStr = format(day, 'yyyy-MM-dd');
-    return DailyRecord.findOneAndUpdate({ date: dayStr }, data, { returnDocument: 'after', runValidators: true });
+    const query = { date: dayStr };
+    if (userId) query.userId = userId;
+    return DailyRecord.findOneAndUpdate(query, data, { returnDocument: 'after', runValidators: true });
   }
 
-  async evaluateCommitments(dailyRecord) {
+  async evaluateCommitments(dailyRecord, userId) {
     checkDB();
     if (dailyRecord.evaluationId) {
       return { strikesCreated: 0, message: 'Already evaluated' };
     }
     const evaluationId = `${format(dailyRecord.date, 'yyyy-MM-dd')}-${Date.now()}`;
+    const targetUserId = userId || dailyRecord.userId;
     
     const missedRequired = dailyRecord.missedTaskIds.length;
-    const user = await User.findOne();
+    const user = await User.findOne(targetUserId ? { firebaseUid: targetUserId } : {});
     const strikeThreshold = user?.preferences?.strikeRules?.missedCommitmentThreshold || 1;
     const strikesEnabled = user?.preferences?.strikeRules?.enabled !== false;
     
@@ -128,7 +145,7 @@ class DailyService {
     if (strikesEnabled) {
       const totalPlanned = dailyRecord.requiredTaskIds.length + dailyRecord.missedTaskIds.length + dailyRecord.completedTaskIds.length + (dailyRecord.optionalTaskIds?.length || 0) + (dailyRecord.completedOptionalTaskIds?.length || 0);
       
-      const lastStrike = await Strike.findOne().sort({ number: -1 });
+      const lastStrike = await Strike.findOne(targetUserId ? { userId: targetUserId } : {}).sort({ number: -1 });
       let nextNumber = (lastStrike?.number || 0) + 1;
       
       if (totalPlanned === 0) {
@@ -138,6 +155,7 @@ class DailyService {
           date: dailyRecord.date,
           severity: 'high',
           status: 'open',
+          ...(targetUserId ? { userId: targetUserId } : {})
         });
         
         await strike.save();
@@ -147,10 +165,11 @@ class DailyService {
           source: 'system',
           action: 'strike_created',
           message: `Strike #${strike.number} created: ${strike.reason}`,
+          ...(targetUserId ? { userId: targetUserId } : {})
         });
       } else if (missedRequired >= strikeThreshold) {
         for (const taskId of dailyRecord.missedTaskIds) {
-          const task = await Task.findById(taskId);
+          const task = await Task.findOne({ _id: taskId, ...(targetUserId ? { userId: targetUserId } : {}) });
           if (!task) continue;
           
           const strike = new Strike({
@@ -160,6 +179,7 @@ class DailyService {
             date: dailyRecord.date,
             severity: missedRequired > 2 ? 'high' : 'low',
             status: 'open',
+            ...(targetUserId ? { userId: targetUserId } : {})
           });
           
           await strike.save();
@@ -170,16 +190,17 @@ class DailyService {
             action: 'strike_created',
             message: `Strike #${strike.number} created: ${strike.reason}`,
             relatedTaskId: taskId,
+            ...(targetUserId ? { userId: targetUserId } : {})
           });
         }
       }
       
       if (strikesCreated > 0) {
-        const gamification = await this.getOrCreateGamification();
+        const gamification = await this.getOrCreateGamification(targetUserId);
         gamification.currentStrikes += strikesCreated;
         await gamification.save();
         
-        await this.checkAndTriggerConsequences(gamification.currentStrikes);
+        await this.checkAndTriggerConsequences(gamification.currentStrikes, targetUserId);
       }
     }
     
@@ -190,24 +211,29 @@ class DailyService {
     return { strikesCreated, missedRequired };
   }
 
-  async getOrCreateGamification() {
-    let gamification = await Gamification.findOne();
+  async getOrCreateGamification(userId) {
+    const query = userId ? { userId } : {};
+    let gamification = await Gamification.findOne(query);
     if (!gamification) {
-      gamification = new Gamification({ userId: 'default_user' });
+      gamification = new Gamification({ userId: userId || 'default_user' });
       await gamification.save();
     }
     return gamification;
   }
 
-  async checkAndTriggerConsequences(totalStrikes) {
+  async checkAndTriggerConsequences(totalStrikes, userId) {
     checkDB();
-    const consequences = await Consequence.find({ status: 'pending' });
+    const query = { status: 'pending' };
+    if (userId) query.userId = userId;
+    const consequences = await Consequence.find(query);
     if (!consequences || consequences.length === 0) return;
 
     let strikesCount = totalStrikes;
     if (strikesCount === undefined || strikesCount === null) {
-      const openCount = await Strike.countDocuments({ status: 'open' });
-      const lastStrike = await Strike.findOne().sort({ number: -1 });
+      const strikeQuery = { status: 'open' };
+      if (userId) strikeQuery.userId = userId;
+      const openCount = await Strike.countDocuments(strikeQuery);
+      const lastStrike = await Strike.findOne(userId ? { userId } : {}).sort({ number: -1 });
       const totalCount = lastStrike?.number || 0;
       strikesCount = Math.max(openCount, totalCount);
     }
@@ -227,7 +253,7 @@ class DailyService {
           }
           await consequence.save();
           
-          const gamification = await this.getOrCreateGamification();
+          const gamification = await this.getOrCreateGamification(userId);
           if (consequence.type === 'financial') {
             const numericValue = parseFloat(String(consequence.value || '0').replace(/[^0-9.]/g, '')) || 0;
             gamification.monetaryPenaltyOwed = (gamification.monetaryPenaltyOwed || 0) + numericValue;
@@ -239,17 +265,20 @@ class DailyService {
             action: 'consequence_triggered',
             message: `Consequence triggered: ${consequence.title} (${consequence.trigger})`,
             metadata: { consequenceId: consequence._id, strikesCount },
+            ...(userId ? { userId } : {})
           });
         }
       }
     }
   }
 
-  async runDailyEvaluation(date = new Date()) {
+  async runDailyEvaluation(date = new Date(), userId) {
     checkDB();
     const day = startOfDay(new Date(date));
     const dayStr = format(day, 'yyyy-MM-dd');
-    const record = await DailyRecord.findOne({ date: dayStr });
+    const query = { date: dayStr };
+    if (userId) query.userId = userId;
+    const record = await DailyRecord.findOne(query);
     
     if (!record) {
       return { message: 'No record for this date', strikesCreated: 0 };
@@ -260,7 +289,9 @@ class DailyService {
     }
     
     const dateStr = format(record.date, 'yyyy-MM-dd');
-    const tasks = await Task.find({ scheduledDate: dateStr });
+    const taskQuery = { scheduledDate: dateStr };
+    if (userId) taskQuery.userId = userId;
+    const tasks = await Task.find(taskQuery);
     
     const requiredTaskIds = tasks.filter(t => t.commitmentLevel === 'required').map(t => t._id.toString());
     const optionalTaskIds = tasks.filter(t => t.commitmentLevel === 'optional').map(t => t._id.toString());
@@ -284,10 +315,10 @@ class DailyService {
     
     await record.save();
     
-    return this.evaluateCommitments(record);
+    return this.evaluateCommitments(record, userId);
   }
 
-  async evaluatePastDays(daysToLookBack = 7) {
+  async evaluatePastDays(daysToLookBack = 7, userId) {
     checkDB();
     const today = startOfDay(new Date());
     let strikesCreatedTotal = 0;
@@ -301,7 +332,9 @@ class DailyService {
       pastDateStrings.push(format(pastDate, 'yyyy-MM-dd'));
     }
 
-    const existingRecords = await DailyRecord.find({ date: { $in: pastDateStrings } });
+    const recQuery = { date: { $in: pastDateStrings } };
+    if (userId) recQuery.userId = userId;
+    const existingRecords = await DailyRecord.find(recQuery);
     const recordMap = new Map();
     for (const rec of existingRecords) {
       recordMap.set(rec.date, rec);
@@ -313,9 +346,9 @@ class DailyService {
       let record = recordMap.get(pastDateStr);
       
       if (!record) {
-        const tasks = await Task.find({
-          scheduledDate: pastDateStr,
-        });
+        const taskQuery = { scheduledDate: pastDateStr };
+        if (userId) taskQuery.userId = userId;
+        const tasks = await Task.find(taskQuery);
         
         const requiredTaskIds = tasks
           .filter(t => t.commitmentLevel === 'required')
@@ -335,13 +368,14 @@ class DailyService {
           missedTaskIds: requiredTaskIds,
           totalWorkSeconds: 0,
           status: (requiredTaskIds.length === 0 && optionalTaskIds.length === 0) ? 'no_progress' : 'partial',
+          ...(userId ? { userId } : {})
         });
         await record.save();
         recordMap.set(pastDateStr, record);
       }
       
       if (record && !record.evaluationId) {
-        const result = await this.runDailyEvaluation(pastDate);
+        const result = await this.runDailyEvaluation(pastDate, userId);
         if (result && result.strikesCreated) {
           strikesCreatedTotal += result.strikesCreated;
         }

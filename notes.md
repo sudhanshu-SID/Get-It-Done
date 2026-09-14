@@ -297,3 +297,111 @@ sequenceDiagram
     Backend-->>Frontend: Return Current Dashboard State
     Frontend-->>User: Renders UI & Shows Penalty Alerts
 ```
+
+---
+
+## 8. Edge Case Engineering: Mental Framework & Multi-Tenant Auth
+
+### The 5 Lenses of Edge-Case Thinking
+When designing software architectures, engineers don't guess edge cases randomly—they systematically stress-test features across five distinct dimensional lenses:
+
+```mermaid
+flowchart TD
+    Feature[System Feature / Action] --> Lens1[1. Lifecycle & Boundaries]
+    Feature --> Lens2[2. Multi-Tenant & Security]
+    Feature --> Lens3[3. Environment & Network]
+    Feature --> Lens4[4. Human Chaos & Input]
+    Feature --> Lens5[5. Asynchronous & Concurrency]
+
+    Lens1 --> Ex1[Cold start, zero data, midnight rollover, expiry]
+    Lens2 --> Ex2[IDOR leaks, cross-tenant pollution, account merging]
+    Lens3 --> Ex3[Sleeping server, dropped connection, offline timer]
+    Lens4 --> Ex4[Trailing spaces, double-clicks, case mismatches]
+    Lens5 --> Ex5[Multi-tab edits, race conditions, partial failures]
+```
+
+#### 1. Lifecycle & State Boundary Lens
+* **Definition:** Questions what happens at the extreme edges of an entity's existence: creation (0 state), limits (infinity / 100%), and destruction (deletion).
+* **Questions to Ask:**
+  * What does the screen show when a user has 0 tasks, 0 strikes, 0 history?
+  * What happens at 11:59:59 PM vs 12:00:01 AM during streak evaluation?
+  * What happens if an active timer hits 24 hours without the user stopping it?
+
+#### 2. Multi-Tenant & Security Boundary Lens (IDOR & Scoping)
+* **Definition:** Verifies that no user can read, mutate, or deduce data belonging to another tenant.
+* **Questions to Ask:**
+  * If User A guesses the Mongo `_id` of User B's task, can `PUT /api/tasks/:id` update it? (*Prevention: Always query `{ _id: req.params.id, userId: req.userId }`*).
+  * If User A creates a project named "Work", does it collide with User B's project named "Work"? (*Prevention: Compound index `{ userId: 1, name: 1 }`*).
+
+#### 3. Environment & Hardware Lens
+* **Definition:** Assumes the physical world is unreliable: connections drop, free-tier servers sleep, browser tabs get throttled.
+* **Questions to Ask:**
+  * Render free tier sleeps after 15 minutes of inactivity; what if a user stops their timer while the server is waking up? (*Prevention: Optimistic local state persistence*).
+  * What if user switches from Wi-Fi to cellular while logging a task session?
+
+#### 4. Human Chaos & Client Input Lens
+* **Definition:** Assumes users are distracted, make typos, and operate on mobile touchscreens with aggressive autocorrect.
+* **Questions to Ask:**
+  * **Email Casing & Whitespace:** Mobile keyboards often capitalize the first letter (`Alex@gmail.com`) and add trailing spaces (`alex@gmail.com `). Without `.trim().toLowerCase()`, a user will create two separate accounts and report "lost data".
+  * **Rapid Double-Clicks:** Clicking "Complete Task" or "Start Timer" 5 times in 200ms creates race conditions and duplicate entries.
+
+#### 5. Concurrency & Multi-Tab Lens
+* **Definition:** Users frequently open multiple browser tabs simultaneously.
+* **Questions to Ask:**
+  * If Tab A has an active focus timer and Tab B logs out, what happens when Tab A tries to stop the timer? (*Prevention: Never wipe memory abruptly on 401; buffer unsaved session to `localStorage` and request re-auth*).
+
+---
+
+### Multi-Tenant Auth Architecture: Zero-Data-Loss Migration Protocol
+For an existing system with active production data, transitioning to multi-tenant auth must follow a **Zero-Data-Loss Protocol**:
+
+```
+[Phase 0: Pre-Migration Snapshot]
+   mongodump / JSON Export of all collections -> Timestamped backup
+          │
+          ▼
+[Phase 1: Admin Account Bootstrap]
+   User creates primary account (e.g. owner@example.com) -> Obtains master userId
+          │
+          ▼
+[Phase 2: Non-Destructive In-Place Assignment]
+   Execute non-destructive Mongoose query:
+   Task.updateMany({ userId: { $exists: false } }, { $set: { userId: masterId } })
+   Gamification.updateMany({ userId: "default_user" }, { $set: { userId: masterId } })
+          │
+          ▼
+[Phase 3: Verification & Count Audit]
+   Assert: Total records before == Total records assigned to masterId
+          │
+          ▼
+[Phase 4: Enable Strict Scoping Middleware]
+   Turn on requireAuth and tenant filtering across all REST endpoints
+```
+
+> **Safety Guarantee:** `$set` strictly adds the missing `userId` attribute. It NEVER deletes, overwrites, or modifies any existing title, streak, duration, strike, or note.
+
+---
+
+### Admin Role & Privileges: Do You Need It?
+In a personal productivity platform, an admin role is not strictly necessary for day-to-day operations, but implementing a simple `role: 'user' | 'admin'` flag on the `User` schema provides critical future-proofing:
+
+| Potential Admin Capability | Purpose | Is It Needed Now? |
+| :--- | :--- | :--- |
+| **Data Claiming & Migration** | Linking unassigned legacy documents to the first owner | **Yes (One-time tool)** |
+| **System Health & DB Telemetry** | Viewing database collection sizes, active timer count | Nice to have |
+| **User Data Mutation** | Editing another user's tasks or strikes | **No (Anti-pattern)** |
+| **Spam / Account Purge** | Deleting inactive or malicious accounts | Only if app goes viral |
+
+---
+
+### Authentication Service: Firebase Auth vs. Self-Hosted / Google Cloud
+
+| Feature | Firebase Authentication (Spark Plan) | Google Cloud Console + Custom JWT |
+| :--- | :--- | :--- |
+| **Cost** | 100% Free up to 50,000 Monthly Active Users | 100% Free forever |
+| **Google Sign-In** | 1-line client SDK (`signInWithPopup`) | Requires OAuth redirect URL routing, exchange codes |
+| **Password Reset** | Automated email dispatch by Google infrastructure | Requires setting up SendGrid/Resend SMTP API keys |
+| **Token Refresh** | Automatic background silent refresh in SDK | Must manually manage refresh tokens & cookies |
+| **Code Modularity** | Abstracted behind `authService.ts` (easily swappable) | Custom Express auth controller |
+| **Recommendation** | **Recommended for speed, reliability & zero maintenance** | Good if avoiding third-party vendor lock-in |
+

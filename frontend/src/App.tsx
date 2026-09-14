@@ -23,6 +23,8 @@ import { ConsequenceModal } from './features/strikes/ConsequenceModal';
 import { AnalyticsDashboard } from './features/analytics/AnalyticsDashboard';
 import { SettingsView } from './features/settings/SettingsView';
 import { AgentInspectorModal } from './features/agent/AgentInspectorModal';
+import { AuthPage } from './features/auth/AuthPage';
+import { useAuth } from './context/AuthContext';
 
 import {
   TodayDashboardData,
@@ -38,12 +40,52 @@ import {
 } from './types/index';
 import { apiService, onBackendStatusChange, BackendStatus } from './services/api';
 
+const createGuestDashboardData = (): TodayDashboardData => ({
+  date: new Date().toISOString(),
+  formattedDate: new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }),
+  user: {
+    name: 'Operative',
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+  },
+  summary: {
+    totalRequired: 0,
+    completedRequired: 0,
+    remainingRequired: 0,
+    totalOptional: 0,
+    completedOptional: 0,
+    completionRate: 0,
+    totalTrackedMinutesToday: 0,
+    currentStrikes: 0,
+    currentStreak: 0,
+    longestStreak: 0,
+  },
+  requiredTasks: [],
+  optionalTasks: [],
+  activeTimer: null,
+  yesterday: null,
+  projectContexts: [],
+  recentStrikes: [],
+  dailyNote: '',
+  noProgressToday: false,
+});
+
 export default function App() {
+  const { user, isAuthenticated, isLoading: isAuthLoading } = useAuth();
+
   // Navigation State
   const [activeTab, setActiveTab] = useState<NavTab>('today');
 
+  // Intercept any mutating action if unauthenticated
+  const requireAuth = (action: () => void) => {
+    if (!isAuthenticated) {
+      setActiveTab('auth');
+      return;
+    }
+    action();
+  };
+
   // Core Data States
-  const [todayData, setTodayData] = useState<TodayDashboardData | null>(null);
+  const [todayData, setTodayData] = useState<TodayDashboardData | null>(createGuestDashboardData);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [goals, setGoals] = useState<Goal[]>([]);
@@ -101,6 +143,7 @@ export default function App() {
 
   // Load essential Today data (Fast path)
   const loadTodayData = useCallback(async () => {
+    if (!isAuthenticated) return;
     try {
       const [todayRes, timerRes] = await Promise.all([
         apiService.getTodayDashboard(),
@@ -113,10 +156,11 @@ export default function App() {
       console.error('Failed to load today data', err);
       setError(err.message || 'Failed to sync today data');
     }
-  }, []);
+  }, [isAuthenticated]);
 
   // Load tab-specific data on-demand (Lazy Loading)
   const loadTabData = useCallback(async (tab: NavTab) => {
+    if (!isAuthenticated || tab === 'auth') return;
     try {
       switch (tab) {
         case 'today':
@@ -181,7 +225,7 @@ export default function App() {
     } catch (err: any) {
       console.error(`Failed to load data for tab: ${tab}`, err);
     }
-  }, [loadTodayData]);
+  }, [isAuthenticated, loadTodayData]);
 
   // Fast Refresh: Refreshes today data + currently active tab
   const refreshAllData = useCallback(async () => {
@@ -194,6 +238,24 @@ export default function App() {
   // Initial Load: Only fetch what's needed for the initial screen
   useEffect(() => {
     const initApp = async () => {
+      if (isAuthLoading) return;
+      if (!isAuthenticated) {
+        // Purge all user data from memory on logout / unauthenticated session
+        setTodayData(createGuestDashboardData());
+        setTasks([]);
+        setProjects([]);
+        setGoals([]);
+        setRewards([]);
+        setStrikes([]);
+        setConsequences([]);
+        setAnalytics(null);
+        setSettings(null);
+        setActiveTimer(null);
+        localStorage.removeItem('gid_pending_timer_stop');
+        setIsLoading(false);
+        return;
+      }
+
       setIsLoading(true);
       try {
         const [todayRes, timerRes, settingsRes, consequencesRes] = await Promise.all([
@@ -225,7 +287,7 @@ export default function App() {
     };
 
     initApp();
-  }, []);
+  }, [isAuthenticated, isAuthLoading]);
 
   // When switching tabs, load data for that tab on demand
   useEffect(() => {
@@ -554,12 +616,29 @@ export default function App() {
     return res.agentApiKey;
   };
 
+  // Standalone Full-Screen Auth View (No Navbar / No site headers)
+  if (activeTab === 'auth') {
+    return (
+      <AuthPage
+        onAuthSuccess={() => {
+          setIsLoading(true);
+          setActiveTab('today');
+        }}
+        onBackToDashboard={() => {
+          setActiveTab('today');
+        }}
+      />
+    );
+  }
+
+  // Dashboard Loading Screen while Backend Data Synchronizes
   if (isLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[#E4E3E0] text-[#141414] font-mono text-xs">
-        <div className="flex flex-col items-center space-y-3 border-2 border-[#141414] bg-white p-6 shadow-sm">
+        <div className="flex flex-col items-center space-y-3 border-2 border-[#141414] bg-white p-6 shadow-sm text-center">
           <div className="h-6 w-6 animate-spin border-2 border-[#141414] border-t-transparent" />
-          <span className="font-bold tracking-widest uppercase">INITIALIZING ACCOUNTABILITY ENGINE...</span>
+          <span className="font-bold tracking-widest uppercase">GOOD THINGS TAKES TIME...</span>
+          <span className="text-neutral-500 text-[11px]">Loading Your Commitments</span>
         </div>
       </div>
     );
@@ -583,7 +662,7 @@ export default function App() {
         longestStreak={todayData?.summary?.longestStreak ?? analytics?.longestStreak ?? 0}
         backendStatus={backendStatus}
         onRefreshBackend={handleRefreshBackend}
-        onOpenAgentInspector={() => setIsAgentInspectorOpen(true)}
+        onOpenAgentInspector={() => requireAuth(() => setIsAgentInspectorOpen(true))}
       />
 
       {/* Main Viewport */}
@@ -602,28 +681,45 @@ export default function App() {
             activeConsequences={consequences.filter(c => c.status === 'active' || strikes.filter(s => s.status === 'open').length >= (parseInt(c.trigger?.match(/\d+/)?.[0] || '10', 10)))}
             onResolveConsequence={handleResolveConsequence}
             onNavigateToStrikes={() => setActiveTab('strikes')}
-            onCompleteTask={handleCompleteTask}
-            onUncompleteTask={handleUncompleteTask}
-            onStartTimer={handleStartTimer}
+            onCompleteTask={async task => {
+              requireAuth(() => handleCompleteTask(task));
+            }}
+            onUncompleteTask={async taskId => {
+              requireAuth(() => handleUncompleteTask(taskId));
+            }}
+            onStartTimer={async taskId => {
+              requireAuth(() => handleStartTimer(taskId));
+            }}
             onPauseTimer={handlePauseTimer}
             onResumeTimer={handleResumeTimer}
             onStopTimer={handleStopTimer}
             onOpenTaskModal={task => {
-              setSelectedTaskForEdit(task || null);
-              setIsTaskModalOpen(true);
+              requireAuth(() => {
+                setSelectedTaskForEdit(task || null);
+                setIsTaskModalOpen(true);
+              });
             }}
             onOpenRescheduleModal={task => {
-              setSelectedTaskForReschedule(task);
-              setIsRescheduleModalOpen(true);
+              requireAuth(() => {
+                setSelectedTaskForReschedule(task);
+                setIsRescheduleModalOpen(true);
+              });
             }}
             onOpenContextEditModal={project => {
-              setSelectedProjectForContext(project);
-              setIsContextEditModalOpen(true);
+              requireAuth(() => {
+                setSelectedProjectForContext(project);
+                setIsContextEditModalOpen(true);
+              });
             }}
-            onRecordNoProgress={handleTriggerRecordNoProgress}
-            onSaveDailyNote={handleSaveDailyNote}
+            onRecordNoProgress={() => {
+              requireAuth(handleTriggerRecordNoProgress);
+            }}
+            onSaveDailyNote={async note => {
+              requireAuth(() => handleSaveDailyNote(note));
+            }}
             onNavigateToProjects={() => setActiveTab('projects')}
             onNavigateToHistory={() => setActiveTab('analytics')}
+            onRequireAuth={() => setActiveTab('auth')}
           />
         )}
 
@@ -634,19 +730,23 @@ export default function App() {
             projects={projects}
             categories={currentCategories}
             activeTimer={activeTimer}
-            onCompleteTask={handleCompleteTask}
-            onUncompleteTask={handleUncompleteTask}
-            onStartTimer={handleStartTimer}
+            onCompleteTask={task => requireAuth(() => handleCompleteTask(task))}
+            onUncompleteTask={taskId => requireAuth(() => handleUncompleteTask(taskId))}
+            onStartTimer={taskId => requireAuth(() => handleStartTimer(taskId))}
             onStopTimer={handleStopTimer}
             onOpenTaskModal={task => {
-              setSelectedTaskForEdit(task || null);
-              setIsTaskModalOpen(true);
+              requireAuth(() => {
+                setSelectedTaskForEdit(task || null);
+                setIsTaskModalOpen(true);
+              });
             }}
             onOpenRescheduleModal={task => {
-              setSelectedTaskForReschedule(task);
-              setIsRescheduleModalOpen(true);
+              requireAuth(() => {
+                setSelectedTaskForReschedule(task);
+                setIsRescheduleModalOpen(true);
+              });
             }}
-            onDeleteTask={handleDeleteTask}
+            onDeleteTask={taskId => requireAuth(() => handleDeleteTask(taskId))}
           />
         )}
 
@@ -657,27 +757,34 @@ export default function App() {
             tasks={tasks}
             activeTimer={activeTimer}
             onOpenProjectModal={proj => {
-              setSelectedProjectForEdit(proj || null);
-              setIsProjectModalOpen(true);
+              requireAuth(() => {
+                setSelectedProjectForEdit(proj || null);
+                setIsProjectModalOpen(true);
+              });
             }}
             onOpenContextEditModal={proj => {
-              setSelectedProjectForContext(proj);
-              setIsContextEditModalOpen(true);
+              requireAuth(() => {
+                setSelectedProjectForContext(proj);
+                setIsContextEditModalOpen(true);
+              });
             }}
-            onDeleteProject={handleDeleteProject}
-            onStartTimer={handleStartTimer}
-            onCompleteTask={handleCompleteTask}
-            onUncompleteTask={handleUncompleteTask}
+            onDeleteProject={id => requireAuth(() => handleDeleteProject(id))}
+            onStartTimer={taskId => requireAuth(() => handleStartTimer(taskId))}
+            onCompleteTask={task => requireAuth(() => handleCompleteTask(task))}
+            onUncompleteTask={taskId => requireAuth(() => handleUncompleteTask(taskId))}
             onCreateTaskForProject={projectId => {
-              const project = projects.find(p => p._id === projectId);
-              setSelectedTaskForEdit({ 
-                projectId, 
-                projectName: project?.name,
-                category: 'project'
-              } as Partial<Task>);
-              setIsTaskModalOpen(true);
+              requireAuth(() => {
+                const project = projects.find(p => p._id === projectId);
+                setSelectedTaskForEdit({ 
+                  projectId, 
+                  projectName: project?.name,
+                  category: 'project'
+                } as Partial<Task>);
+                setIsTaskModalOpen(true);
+              });
             }}
-            onStartProjectTimer={handleStartProjectTimer}
+            onStartProjectTimer={projectId => requireAuth(() => handleStartProjectTimer(projectId))}
+            onRequireAuth={() => setActiveTab('auth')}
           />
         )}
 
@@ -686,10 +793,12 @@ export default function App() {
           <GoalList
             goals={goals}
             onOpenGoalModal={goal => {
-              setSelectedGoalForEdit(goal || null);
-              setIsGoalModalOpen(true);
+              requireAuth(() => {
+                setSelectedGoalForEdit(goal || null);
+                setIsGoalModalOpen(true);
+              });
             }}
-            onDeleteGoal={handleDeleteGoal}
+            onDeleteGoal={id => requireAuth(() => handleDeleteGoal(id))}
           />
         )}
 
@@ -699,11 +808,13 @@ export default function App() {
             rewards={rewards}
             goals={goals}
             onOpenRewardModal={reward => {
-              setSelectedRewardForEdit(reward || null);
-              setIsRewardModalOpen(true);
+              requireAuth(() => {
+                setSelectedRewardForEdit(reward || null);
+                setIsRewardModalOpen(true);
+              });
             }}
-            onRedeemReward={handleRedeemReward}
-            onDeleteReward={handleDeleteReward}
+            onRedeemReward={id => requireAuth(() => handleRedeemReward(id))}
+            onDeleteReward={id => requireAuth(() => handleDeleteReward(id))}
           />
         )}
 
@@ -712,30 +823,58 @@ export default function App() {
           <StrikeList
             strikes={strikes}
             consequences={consequences}
-            onOpenStrikeModal={() => setIsStrikeModalOpen(true)}
-            onResolveStrike={handleResolveStrike}
-            onDeleteStrike={handleDeleteStrike}
+            onOpenStrikeModal={() => requireAuth(() => setIsStrikeModalOpen(true))}
+            onResolveStrike={id => requireAuth(() => handleResolveStrike(id))}
+            onDeleteStrike={id => requireAuth(() => handleDeleteStrike(id))}
             onOpenConsequenceModal={consequence => {
-              setSelectedConsequenceForEdit(consequence || null);
-              setIsConsequenceModalOpen(true);
+              requireAuth(() => {
+                setSelectedConsequenceForEdit(consequence || null);
+                setIsConsequenceModalOpen(true);
+              });
             }}
-            onDeleteConsequence={handleDeleteConsequence}
-            onResolveConsequence={handleResolveConsequence}
+            onDeleteConsequence={id => requireAuth(() => handleDeleteConsequence(id))}
+            onResolveConsequence={id => requireAuth(() => handleResolveConsequence(id))}
           />
         )}
 
         {/* Tab 7: Analytics */}
-        {activeTab === 'analytics' && analytics && (
-          <AnalyticsDashboard analytics={analytics} />
+        {activeTab === 'analytics' && (
+          analytics ? (
+            <AnalyticsDashboard analytics={analytics} />
+          ) : (
+            <div className="border border-[#141414] bg-white p-8 text-center font-mono text-xs">
+              <p className="font-bold uppercase text-neutral-800">No telemetry data available</p>
+              <p className="text-neutral-500 mt-1">Sign in to review historical accountability statistics and focus charts.</p>
+              <button
+                onClick={() => setActiveTab('auth')}
+                className="mt-4 bg-[#141414] text-white px-4 py-2 font-bold uppercase tracking-wider hover:bg-black"
+              >
+                Authenticate Now
+              </button>
+            </div>
+          )
         )}
 
         {/* Tab 8: Settings */}
-        {activeTab === 'settings' && settings && (
-          <SettingsView
-            settings={settings}
-            onUpdateSettings={handleUpdateSettings}
-            onOpenAgentInspector={() => setIsAgentInspectorOpen(true)}
-          />
+        {activeTab === 'settings' && (
+          settings ? (
+            <SettingsView
+              settings={settings}
+              onUpdateSettings={handleUpdateSettings}
+              onOpenAgentInspector={() => requireAuth(() => setIsAgentInspectorOpen(true))}
+            />
+          ) : (
+            <div className="border border-[#141414] bg-white p-8 text-center font-mono text-xs">
+              <p className="font-bold uppercase text-neutral-800">Settings Restricted</p>
+              <p className="text-neutral-500 mt-1">Sign in to customize categories, default durations, and strike thresholds.</p>
+              <button
+                onClick={() => setActiveTab('auth')}
+                className="mt-4 bg-[#141414] text-white px-4 py-2 font-bold uppercase tracking-wider hover:bg-black"
+              >
+                Authenticate Now
+              </button>
+            </div>
+          )
         )}
       </main>
 

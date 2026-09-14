@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const TaskSessionSchema = new mongoose.Schema({
+  userId: { type: String, required: true, index: true },
   taskId: { type: String, required: true },
   taskTitle: String,
   startTime: { type: String, required: true },

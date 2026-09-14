@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const ActiveTimerSchema = new mongoose.Schema({
+  userId: { type: String, required: true, index: true },
   taskId: { type: String, required: true },
   taskTitle: { type: String, required: true },
   projectId: String,
