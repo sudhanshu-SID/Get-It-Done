@@ -34,21 +34,21 @@
 - **Deterministic Streak Engine (COMPLETED):** Implemented strict 100% commitment adherence, break-day continuity ("I Did Nothing Today" `status: 'no_progress'`), and permanent persistence of all-time peak streaks in `Gamification.longestStreak`.
 - **Sleep-Aware System Status & Health Keep-Alive (COMPLETED):** Built event-driven connection monitoring (`Operational` vs `Standby`) with 1-click reconnect and targeted 9-minute timer heartbeat that prevents instance dropoffs while preserving free-tier quotas.
 
-## Phase 7: Multi-User Authentication & Logical Multi-Tenancy (ACTIVE / CURRENT WORKING PHASE)
+## Phase 7: Multi-User Authentication & Logical Multi-Tenancy (COMPLETED)
 - **Goal:** Transform the single-tenant app into a secure, multi-tenant productivity system where each user has isolated access to their own tasks, projects, goals, strikes, habits, and analytics dashboards.
-- **Architecture & Technology (100% Free Plan):**
-  - **Auth Strategy:** Native JWT + Google OAuth (Google Cloud Console OAuth 2.0 Client ID is completely free with no user limits) OR Firebase Auth (Free Spark plan up to 50k MAUs).
-  - **Logical Multi-Tenancy:** Single MongoDB database with indexed `userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', index: true }` across all models.
-  - **Backend Security:** `requireAuth` middleware enforcing tenant query scoping on every `.find()`, `.create()`, `.updateOne()`, and `.deleteOne()`.
-  - **Frontend Integration:** `AuthContext.tsx`, protected routes, login/register UI with email/password and "Continue with Google", token injection in `api.ts`.
-  - **Initialization Pipeline:** Auto-bootstrap default `Gamification` (Level 1, 0 XP) and `UserSettings` records for each new user upon registration.
-- **Critical Edge Cases to Handle:**
-  1. *Zero-Data-Loss Legacy Migration*: Strictly safeguard all existing tasks, goals, strikes, and records by performing a pre-migration JSON export/snapshot and a non-destructive `$set: { userId }` query without modifying or dropping existing fields.
-  2. *Email Sanitization & Casing*: Enforce strict `.trim().toLowerCase()` on both client and server to prevent duplicate accounts created by accidental capitalization or mobile autofill whitespace.
-  3. *Account Linking & Collisions (Password vs Google OAuth)*: Merge existing email/password accounts with Google OAuth when the verified email matches, preventing duplicate records or auth lockout.
-  4. *Multi-tab logout / token expiration during active focus timer*: Prevent losing active stopwatch time if token expires or user logs out elsewhere by using local snapshot recovery.
-  5. *Multi-timezone streak rollover*: Ensuring each user's "Today" and streak evaluation aligns with their specific timezone, not the UTC server time.
-  6. *IDOR (Insecure Direct Object References)*: Preventing cross-tenant data leaks by verifying `userId` matches the resource owner on every update/delete operation.
+- **Architecture & Technology Delivered:**
+  - **Firebase Authentication (Web SDK + Admin SDK):** Email/password registration, secure login, password reset, and one-click Google Sign-In via `signInWithPopup`.
+  - **Zero-Trust Token Verification:** Backend Express middleware (`backend/middleware/auth.js`) cryptographically validating Firebase Bearer ID tokens and stamping `req.userId` and `req.userEmail`.
+  - **Logical Multi-Tenancy:** Indexed `userId: { type: String, required: true, index: true }` across all 13 Mongoose models (`Task`, `Project`, `Strike`, `Consequence`, `DailyRecord`, `TaskSession`, `Note`, `Gamification`, `UserSettings`, `Goal`, `Reward`, `AccountabilityLog`, `ActiveTimer`).
+  - **Defense-in-Depth Query Scoping:** Every single REST endpoint and service method scopes database queries by `{ userId: req.userId }`, preventing cross-tenant data leaks and IDOR vulnerabilities.
+  - **User Provisioning & Bootstrapping:** `POST /api/auth/sync` automatically syncs user profile and provisions default `Gamification` (Level 1, 0 XP) and `UserSettings` records upon first sign-in.
+  - **Zero-Data-Loss Migration:** Ran non-destructive migration script claiming all legacy production tasks, projects, strikes, daily records, and gamification to master user `5gAs8um6YDOq65ew3o59L2AW9012` with full JSON backups preserved.
+  - **Light Split Auth Page (`AuthPage.tsx`):** Modern 50/50 desktop split layout with clean off-white aesthetic (`bg-stone-50`), brutalist typography, Jim Rohn quote, and guest preview escape hatch.
+  - **Guest Preview & Action Interception:** Unauthenticated visitors can preview the dashboard layout; any mutating action (add task, start timer, complete task) is gracefully intercepted by `requireAuth()`, redirecting to `AuthPage`.
+  - **Zero In-Memory State Leakage:** On logout or user switch, explicitly reset all 10 React state hooks and purged `localStorage` cache keys to prevent cross-account data flashes.
+  - **Dashboard Ergonomics:** Shifted Yesterday's Recap and Daily Review note to the left column of `TodayDashboard.tsx`, wired `POST /api/daily/note` for reflection persistence, and sliced "Where I Left Off" to top 4 projects with `View All Projects →` link.
+  - **Dual-Layer Optional Backlog Filter:** Filtered completed one-time tasks from Today's dashboard while preserving them in the main Tasks directory.
+  - **Accurate Analytics Telemetry:** Classified Today's bar in `AnalyticsDashboard.tsx` and `backend/routes/index.js` dynamically as `in_progress` (or `partial`/`completed`) rather than falsely diagnosing active days as `no_progress` (REST).
 
 ## Phase 8: AI Agent Integration, Habit Coaching & Goal Roadmaps (NEXT PHASE)
 - **Goal:** Proactive AI co-pilot that assists with habit formation, goal decomposition, autonomous task adjustments, and productivity feedback.
