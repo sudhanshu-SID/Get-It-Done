@@ -562,3 +562,28 @@ In a personal productivity platform, an admin role is not strictly necessary for
 | **Code Modularity** | Abstracted behind `authService.ts` (easily swappable) | Custom Express auth controller |
 | **Recommendation** | **Recommended for speed, reliability & zero maintenance** | Good if avoiding third-party vendor lock-in |
 
+---
+
+## 9. Feature Deep-Dive: Quests (Periodic Milestone Commitments)
+
+### The Origin Story: The Monthly Resume Forcing Function
+The concept of **Quests** was born from a personal habit reflection: wanting to update my resume once every month. 
+
+I realized that updating a resume every month isn't just about editing a document—it's a powerful psychological **forcing function**. If you commit to updating your resume every single month, you are motivated to actively learn something new, build a project, or master a new skill each month just so you have something real and meaningful to write down.
+
+### From Inspiration to System Architecture
+This spark of motivation led to a bigger architectural realization:
+1. **Periodic Cadence Tasks:** There are important recurring milestones in life—updating your resume, reviewing monthly finances, paying recurring utility bills, dental checkups, or conducting personal retrospectives—that do not belong in everyday task backlogs.
+2. **The Danger of Strike/Streak Pollution:** In GID's deterministic accountability model, mandatory tasks require 100% daily completion; failing any required task resets streaks to 0 and issues automated strikes. If a monthly milestone is treated as a daily task, missing it on a busy day causes unfair strikes and punishes the user.
+3. **Decoupled Architecture:** Quests were designed as an isolated cadence engine:
+   - They appear directly in the **Today Dashboard** beneath the Daily Commitments section when due.
+   - They act as friendly, persistent reminders that stay with you until completed.
+   - **Zero Strike / Zero Streak Impact:** They **never** increment daily required counts or trigger strikes/resets at midnight.
+   - **Dual Schedule Mechanics:**
+     - **Flexible Timing:** Repeats $N$ months after you complete it (e.g. 1 month after finishing your resume update).
+     - **Exact Day of Month:** Always anchors to a specific calendar date (e.g. 5th of every month for bills or finances).
+   - **7-Day Grace Window:**
+     - If completed on-time or within 7 days of due date: preserves the fixed day anchor for the next month.
+     - If completed $>7$ days late: restarts the 1-month cycle from the completion date to avoid compressed, back-to-back due dates.
+
+

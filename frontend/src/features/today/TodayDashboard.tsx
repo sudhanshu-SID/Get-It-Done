@@ -21,14 +21,19 @@ import {
   FolderKanban, 
   Check 
 } from 'lucide-react';
-import { TodayDashboardData, Task, Project, ActiveTimer, Consequence } from '../../types/index';
+import { TodayDashboardData, Task, Project, ActiveTimer, Consequence, Quest } from '../../types/index';
 import { StickyBoard } from '../notes/StickyBoard';
 import { ActivePenaltyBanner } from '../strikes/ActivePenaltyBanner';
+import { QuestSection } from '../quests/QuestSection';
 
 interface TodayDashboardProps {
   data: TodayDashboardData;
   activeTimer: ActiveTimer | null;
   activeConsequences?: Consequence[];
+  quests?: Quest[];
+  onOpenQuestModal?: (quest?: Quest) => void;
+  onCompleteQuest?: (questId: string) => Promise<void>;
+  onDeleteQuest?: (questId: string) => Promise<void>;
   onResolveConsequence?: (id: string) => Promise<void>;
   onNavigateToStrikes?: () => void;
   onCompleteTask: (task: Task) => Promise<void>;
@@ -41,6 +46,7 @@ interface TodayDashboardProps {
   onOpenRescheduleModal: (task: Task) => void;
   onOpenContextEditModal: (project: Project) => void;
   onRecordNoProgress: () => void;
+  onUndoNoProgress?: () => void;
   onSaveDailyNote: (note: string) => Promise<void>;
   onNavigateToProjects: () => void;
   onNavigateToHistory: () => void;
@@ -51,6 +57,10 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
   data,
   activeTimer,
   activeConsequences = [],
+  quests = [],
+  onOpenQuestModal,
+  onCompleteQuest,
+  onDeleteQuest,
   onResolveConsequence,
   onNavigateToStrikes,
   onCompleteTask,
@@ -63,6 +73,7 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
   onOpenRescheduleModal,
   onOpenContextEditModal,
   onRecordNoProgress,
+  onUndoNoProgress,
   onSaveDailyNote,
   onNavigateToProjects,
   onNavigateToHistory,
@@ -152,6 +163,22 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
           onNavigateToStrikes={onNavigateToStrikes}
         />
       )}
+
+      {/* Rest Day Status Notice */}
+      {data.noProgressToday && (
+        <div className="border-2 border-[#141414] bg-sky-100 p-3.5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 text-xs font-mono">
+          <div className="flex items-center space-x-2.5">
+            <span className="w-2.5 h-2.5 bg-sky-600 border border-[#141414] inline-block animate-pulse" />
+            <span className="font-bold uppercase tracking-wider text-[#141414]">
+              REST DAY ACTIVE — STREAK FROZEN SAFELY WITHOUT PENALTY
+            </span>
+          </div>
+          <span className="text-[11px] opacity-80">
+            Commitments paused. Zero strikes on rollover.
+          </span>
+        </div>
+      )}
+
       {/* High Density Metric Top Header Banner */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between border-b-2 border-[#141414] pb-4 gap-4">
         <div>
@@ -184,13 +211,20 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
           <p className="text-[10px] uppercase font-bold opacity-50 mb-1 font-mono tracking-widest">
             Commitments Load
           </p>
-          <p className="text-2xl font-black italic tracking-tight font-mono text-[#141414]">
-            {data.summary.completedRequired} / {data.summary.totalRequired}
-          </p>
+          <div className="flex items-center space-x-2">
+            <p className="text-2xl font-black italic tracking-tight font-mono text-[#141414]">
+              {data.noProgressToday ? 'PAUSED' : `${data.summary.completedRequired} / ${data.summary.totalRequired}`}
+            </p>
+            {data.noProgressToday && (
+              <span className="text-[10px] font-mono font-bold uppercase bg-sky-100 text-sky-800 border border-sky-300 px-1.5 py-0.5">
+                Rest
+              </span>
+            )}
+          </div>
           <div className="w-full h-1.5 bg-[#E4E3E0] mt-2 overflow-hidden border border-[#141414]">
             <div
-              className="h-full bg-[#141414] transition-all"
-              style={{ width: `${Math.min(100, data.summary.completionRate)}%` }}
+              className={`h-full transition-all ${data.noProgressToday ? 'bg-sky-500' : 'bg-[#141414]'}`}
+              style={{ width: `${data.noProgressToday ? 100 : Math.min(100, data.summary.completionRate)}%` }}
             />
           </div>
         </div>
@@ -483,6 +517,14 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
             )}
           </div>
 
+          {/* MONTHLY QUESTS */}
+          <QuestSection
+            quests={quests}
+            onOpenQuestModal={onOpenQuestModal || (() => {})}
+            onCompleteQuest={onCompleteQuest || (async () => {})}
+            onDeleteQuest={onDeleteQuest || (async () => {})}
+          />
+
           {/* OPTIONAL TASKS */}
           <div className="border-2 border-[#141414] bg-white p-5 space-y-3">
             <button
@@ -574,23 +616,38 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
             })()}
           </div>
 
-          {/* "I DID NOTHING TODAY" Action */}
-          <div className="border-2 border-[#141414] bg-[#DCDAD7] p-4 text-[#141414]">
+          {/* "I DID NOTHING TODAY" / "RESUME THE DAY" Action */}
+          <div className={`border-2 border-[#141414] p-4 text-[#141414] transition-colors ${
+            data.noProgressToday ? 'bg-sky-50' : 'bg-[#DCDAD7]'
+          }`}>
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
               <div>
-                <h4 className="text-xs font-mono font-bold uppercase tracking-wider">
-                  Zero Progress Recording
-                </h4>
+                <div className="flex items-center space-x-2">
+                  <h4 className="text-xs font-mono font-bold uppercase tracking-wider">
+                    {data.noProgressToday ? 'Rest Day Active' : 'Zero Progress Recording'}
+                  </h4>
+                  {data.noProgressToday && (
+                    <span className="text-[10px] font-mono font-bold uppercase bg-sky-200 text-sky-900 border border-sky-400 px-1.5 py-0.5">
+                      Streak Frozen
+                    </span>
+                  )}
+                </div>
                 <p className="mt-0.5 text-[11px] opacity-75">
-                  Record an honest daily telemetry log without artificial task rescheduling.
+                  {data.noProgressToday
+                    ? 'Intentional rest day logged. Streak is preserved without penalties. Click to resume working.'
+                    : 'Record an honest daily telemetry log without artificial task rescheduling.'}
                 </p>
               </div>
               <button
                 id="i-did-nothing-today-btn"
-                onClick={onRecordNoProgress}
-                className="border-2 border-[#141414] bg-white px-3.5 py-2 text-xs font-mono font-bold uppercase tracking-wider text-[#141414] hover:bg-[#141414] hover:text-white transition-colors cursor-pointer shadow-xs"
+                onClick={data.noProgressToday ? onUndoNoProgress : onRecordNoProgress}
+                className={`border-2 border-[#141414] px-3.5 py-2 text-xs font-mono font-bold uppercase tracking-wider transition-colors cursor-pointer shadow-xs ${
+                  data.noProgressToday
+                    ? 'bg-sky-500 text-white hover:bg-sky-600'
+                    : 'bg-white text-[#141414] hover:bg-[#141414] hover:text-white'
+                }`}
               >
-                I DID NOTHING TODAY
+                {data.noProgressToday ? 'RESUME THE DAY' : 'I DID NOTHING TODAY'}
               </button>
             </div>
           </div>
@@ -600,17 +657,32 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
             <div className="border-2 border-[#141414] bg-white p-4 space-y-3">
               <div className="flex items-center justify-between border-b border-[#141414] pb-2">
                 <div>
-                  <span className="text-[10px] font-mono font-bold tracking-widest uppercase opacity-60">
-                    Yesterday's Log
-                  </span>
+                  <div className="flex items-center space-x-2">
+                    <span className="text-[10px] font-mono font-bold tracking-widest uppercase opacity-60">
+                      Yesterday's Log
+                    </span>
+                    {data.yesterday.status === 'no_progress' && (
+                      <span className="bg-sky-200 text-sky-900 border border-sky-400 text-[9px] font-mono font-bold px-1.5 py-0.5 uppercase">
+                        Rest Day
+                      </span>
+                    )}
+                  </div>
                   <div className="mt-0.5 flex items-center space-x-2">
-                    <span className="text-xs font-bold font-mono text-[#141414]">
-                      {data.yesterday.completedCount} / {data.yesterday.totalCount} COMPLETED
-                    </span>
-                    <span>·</span>
-                    <span className="text-xs font-mono opacity-80">
-                      {formatMinutes(data.yesterday.totalWorkMinutes)} WORKED
-                    </span>
+                    {data.yesterday.status === 'no_progress' ? (
+                      <span className="text-xs font-bold font-mono text-sky-800 uppercase">
+                        REST DAY · STREAK PRESERVED
+                      </span>
+                    ) : (
+                      <>
+                        <span className="text-xs font-bold font-mono text-[#141414]">
+                          {data.yesterday.completedCount} / {data.yesterday.totalCount} COMPLETED
+                        </span>
+                        <span>·</span>
+                        <span className="text-xs font-mono opacity-80">
+                          {formatMinutes(data.yesterday.totalWorkMinutes)} WORKED
+                        </span>
+                      </>
+                    )}
                   </div>
                 </div>
 
@@ -624,19 +696,27 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
 
               {showYesterdayDetails && (
                 <div className="border border-[#141414] bg-[#E4E3E0] p-3 text-xs space-y-2 font-mono">
-                  <div>
-                    <span className="text-[10px] font-bold text-green-700 uppercase">
-                      ✓ Completed:
-                    </span>
-                    <ul className="mt-1 space-y-1 text-[11px]">
-                      {data.yesterday.completedTasks.map((t, idx) => (
-                        <li key={idx} className="flex items-center space-x-1.5">
-                          <Check className="h-3 w-3 text-green-700 shrink-0" />
-                          <span>{t}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
+                  {data.yesterday.status === 'no_progress' && (
+                    <div className="text-[11px] font-mono text-sky-900 bg-sky-100 p-2 border border-sky-300">
+                      Rest day logged — streak progression paused safely without penalty.
+                    </div>
+                  )}
+
+                  {data.yesterday.completedTasks.length > 0 && (
+                    <div>
+                      <span className="text-[10px] font-bold text-green-700 uppercase">
+                        ✓ Completed:
+                      </span>
+                      <ul className="mt-1 space-y-1 text-[11px]">
+                        {data.yesterday.completedTasks.map((t, idx) => (
+                          <li key={idx} className="flex items-center space-x-1.5">
+                            <Check className="h-3 w-3 text-green-700 shrink-0" />
+                            <span>{t}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
 
                   {data.yesterday.missedTasks.length > 0 && (
                     <div className="border-t border-black/10 pt-2">

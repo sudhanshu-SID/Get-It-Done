@@ -108,12 +108,12 @@ class DailyService {
     }
     
     record.status = 'no_progress';
-    record.missedTaskIds = [...record.requiredTaskIds];
+    record.missedTaskIds = [];
     record.requiredTaskIds = [];
-    record.dailyNote = record.dailyNote || 'No progress recorded';
+    record.dailyNote = record.dailyNote || 'Break / Rest Day';
+    record.evaluationId = `rest-${todayStr}`;
+    record.evaluationRunAt = new Date();
     await record.save();
-    
-    await this.evaluateCommitments(record, userId);
     
     return record;
   }
@@ -132,8 +132,19 @@ class DailyService {
     if (dailyRecord.evaluationId) {
       return { strikesCreated: 0, message: 'Already evaluated' };
     }
-    const evaluationId = `${format(dailyRecord.date, 'yyyy-MM-dd')}-${Date.now()}`;
     const targetUserId = userId || dailyRecord.userId;
+
+    // Rest days ("no_progress") must never produce strikes or penalties
+    if (dailyRecord.status === 'no_progress') {
+      const evaluationId = `rest-${format(new Date(dailyRecord.date), 'yyyy-MM-dd')}-${Date.now()}`;
+      dailyRecord.evaluationRunAt = new Date();
+      dailyRecord.evaluationId = evaluationId;
+      dailyRecord.missedTaskIds = [];
+      await dailyRecord.save();
+      return { strikesCreated: 0, missedRequired: 0, message: 'Rest day - no strikes' };
+    }
+
+    const evaluationId = `${format(dailyRecord.date, 'yyyy-MM-dd')}-${Date.now()}`;
     
     const missedRequired = dailyRecord.missedTaskIds.length;
     const user = await User.findOne(targetUserId ? { firebaseUid: targetUserId } : {});
@@ -370,14 +381,30 @@ class DailyService {
           status: (requiredTaskIds.length === 0 && optionalTaskIds.length === 0) ? 'no_progress' : 'partial',
           ...(userId ? { userId } : {})
         });
+        if (record.status === 'no_progress') {
+          record.evaluationId = `rest-${pastDateStr}`;
+          record.evaluationRunAt = new Date();
+        }
         await record.save();
         recordMap.set(pastDateStr, record);
       }
       
-      if (record && !record.evaluationId) {
-        const result = await this.runDailyEvaluation(pastDate, userId);
-        if (result && result.strikesCreated) {
-          strikesCreatedTotal += result.strikesCreated;
+      if (record) {
+        if (record.status === 'no_progress') {
+          if (!record.evaluationId) {
+            record.evaluationId = `rest-${pastDateStr}`;
+            record.evaluationRunAt = new Date();
+            record.missedTaskIds = [];
+            await record.save();
+          }
+          continue;
+        }
+
+        if (!record.evaluationId) {
+          const result = await this.runDailyEvaluation(pastDate, userId);
+          if (result && result.strikesCreated) {
+            strikesCreatedTotal += result.strikesCreated;
+          }
         }
       }
     }

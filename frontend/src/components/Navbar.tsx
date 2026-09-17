@@ -16,7 +16,8 @@ import {
   Square,
   User as UserIcon,
   LogOut,
-  LogIn
+  LogIn,
+  Compass
 } from 'lucide-react';
 import { ActiveTimer } from '../types/index';
 import { useAuth } from '../context/AuthContext';
@@ -24,6 +25,7 @@ import { useAuth } from '../context/AuthContext';
 export type NavTab =
   | 'today'
   | 'tasks'
+  | 'quests'
   | 'projects'
   | 'goals'
   | 'rewards'
@@ -110,6 +112,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   const navItems: Array<{ id: NavTab; label: string; icon: React.ComponentType<{ className?: string }> }> = [
     { id: 'today', label: 'Today', icon: CheckSquare },
     { id: 'tasks', label: 'Tasks', icon: ListTodo },
+    { id: 'quests', label: 'Quests', icon: Compass },
     { id: 'projects', label: 'Projects', icon: FolderKanban },
     { id: 'goals', label: 'Goals', icon: Target },
     { id: 'rewards', label: 'Rewards', icon: Gift },

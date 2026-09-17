@@ -36,8 +36,11 @@ import {
   Consequence,
   UserSettings,
   ActiveTimer,
-  AnalyticsSummary
+  AnalyticsSummary,
+  Quest
 } from './types/index';
+import { QuestModal } from './features/quests/QuestModal';
+import { QuestList } from './features/quests/QuestList';
 import { apiService, onBackendStatusChange, BackendStatus } from './services/api';
 
 const createGuestDashboardData = (): TodayDashboardData => ({
@@ -127,6 +130,11 @@ export default function App() {
   const [dsaPromptTask, setDsaPromptTask] = useState<Task | null>(null);
   const [dsaQuestionsSolved, setDsaQuestionsSolved] = useState<number>(1);
 
+  // Quests State
+  const [quests, setQuests] = useState<Quest[]>([]);
+  const [isQuestModalOpen, setIsQuestModalOpen] = useState(false);
+  const [selectedQuestForEdit, setSelectedQuestForEdit] = useState<Quest | null>(null);
+
   // Confirm Modal State
   const [confirmConfig, setConfirmConfig] = useState<{
     isOpen: boolean;
@@ -145,12 +153,14 @@ export default function App() {
   const loadTodayData = useCallback(async () => {
     if (!isAuthenticated) return;
     try {
-      const [todayRes, timerRes] = await Promise.all([
+      const [todayRes, timerRes, questsRes] = await Promise.all([
         apiService.getTodayDashboard(),
-        apiService.getActiveTimer()
+        apiService.getActiveTimer(),
+        apiService.getQuests()
       ]);
       setTodayData(todayRes);
       setActiveTimer(timerRes);
+      setQuests(questsRes);
       setError(null);
     } catch (err: any) {
       console.error('Failed to load today data', err);
@@ -173,6 +183,11 @@ export default function App() {
           ]);
           setTasks(tasksRes);
           setProjects(projectsRes);
+          break;
+        }
+        case 'quests': {
+          const questsRes = await apiService.getQuests();
+          setQuests(questsRes);
           break;
         }
         case 'projects': {
@@ -248,6 +263,7 @@ export default function App() {
         setRewards([]);
         setStrikes([]);
         setConsequences([]);
+        setQuests([]);
         setAnalytics(null);
         setSettings(null);
         setActiveTimer(null);
@@ -258,17 +274,19 @@ export default function App() {
 
       setIsLoading(true);
       try {
-        const [todayRes, timerRes, settingsRes, consequencesRes] = await Promise.all([
+        const [todayRes, timerRes, settingsRes, consequencesRes, questsRes] = await Promise.all([
           apiService.getTodayDashboard(),
           apiService.getActiveTimer(),
           apiService.getSettings(),
-          apiService.getConsequences()
+          apiService.getConsequences(),
+          apiService.getQuests()
         ]);
 
         setTodayData(todayRes);
         setActiveTimer(timerRes);
         setSettings(settingsRes);
         setConsequences(consequencesRes);
+        setQuests(questsRes);
         setError(null);
 
         // Check if there was an uncommitted pending stop session from a previous cold-start
@@ -577,14 +595,14 @@ export default function App() {
     await refreshAllData();
   };
 
-  // Zero Progress ("I DID NOTHING TODAY")
+  // Zero Progress ("I DID NOTHING TODAY" / "RESUME THE DAY")
   const handleTriggerRecordNoProgress = () => {
     setConfirmConfig({
       isOpen: true,
       title: 'Record Zero Progress Day',
       message:
-        'This logs an honest zero-progress entry for today. No fake completions or artificial shifts. Would you like to proceed?',
-      confirmText: 'Record Zero Progress',
+        'This logs an intentional rest day for today. Streak progression is safely paused without penalties or strikes. Would you like to proceed?',
+      confirmText: 'Record Rest Day',
       onConfirm: async () => {
         await apiService.recordNoProgress(
           new Date().toISOString().split('T')[0],
@@ -595,10 +613,60 @@ export default function App() {
     });
   };
 
+  const handleTriggerUndoNoProgress = async () => {
+    await apiService.undoNoProgress();
+    await refreshAllData();
+  };
+
   // Daily Review Note
   const handleSaveDailyNote = async (note: string) => {
     await apiService.saveDailyNote(new Date().toISOString().split('T')[0], note);
     await refreshAllData();
+  };
+
+  // Quests Handlers
+  const handleSaveQuest = async (questData: Partial<Quest>) => {
+    try {
+      if (selectedQuestForEdit?._id) {
+        await apiService.updateQuest(selectedQuestForEdit._id, questData);
+      } else {
+        await apiService.createQuest(questData);
+      }
+      const updatedQuests = await apiService.getQuests();
+      setQuests(updatedQuests);
+      setIsQuestModalOpen(false);
+      setSelectedQuestForEdit(null);
+    } catch (err) {
+      console.error('Failed to save quest', err);
+    }
+  };
+
+  const handleCompleteQuest = async (questId: string) => {
+    try {
+      await apiService.completeQuest(questId);
+      const updatedQuests = await apiService.getQuests();
+      setQuests(updatedQuests);
+    } catch (err) {
+      console.error('Failed to complete quest', err);
+    }
+  };
+
+  const handleDeleteQuest = async (questId: string) => {
+    setConfirmConfig({
+      isOpen: true,
+      title: 'DELETE QUEST',
+      message: 'Are you sure you want to delete this quest? This cannot be undone.',
+      confirmText: 'DELETE',
+      onConfirm: async () => {
+        try {
+          await apiService.deleteQuest(questId);
+          const updatedQuests = await apiService.getQuests();
+          setQuests(updatedQuests);
+        } catch (err) {
+          console.error('Failed to delete quest', err);
+        }
+      }
+    });
   };
 
   // Settings & Agent Key
@@ -714,8 +782,24 @@ export default function App() {
             onRecordNoProgress={() => {
               requireAuth(handleTriggerRecordNoProgress);
             }}
+            onUndoNoProgress={() => {
+              requireAuth(handleTriggerUndoNoProgress);
+            }}
             onSaveDailyNote={async note => {
               requireAuth(() => handleSaveDailyNote(note));
+            }}
+            quests={quests}
+            onOpenQuestModal={quest => {
+              requireAuth(() => {
+                setSelectedQuestForEdit(quest || null);
+                setIsQuestModalOpen(true);
+              });
+            }}
+            onCompleteQuest={async questId => {
+              requireAuth(() => handleCompleteQuest(questId));
+            }}
+            onDeleteQuest={async questId => {
+              requireAuth(() => handleDeleteQuest(questId));
             }}
             onNavigateToProjects={() => setActiveTab('projects')}
             onNavigateToHistory={() => setActiveTab('analytics')}
@@ -750,7 +834,26 @@ export default function App() {
           />
         )}
 
-        {/* Tab 3: Projects & Context States */}
+        {/* Tab 3: Dedicated Quests & Recurring Milestones */}
+        {activeTab === 'quests' && (
+          <QuestList
+            quests={quests}
+            onOpenQuestModal={quest => {
+              requireAuth(() => {
+                setSelectedQuestForEdit(quest || null);
+                setIsQuestModalOpen(true);
+              });
+            }}
+            onCompleteQuest={async questId => {
+              requireAuth(() => handleCompleteQuest(questId));
+            }}
+            onDeleteQuest={async questId => {
+              requireAuth(() => handleDeleteQuest(questId));
+            }}
+          />
+        )}
+
+        {/* Tab 4: Projects & Context States */}
         {activeTab === 'projects' && (
           <ProjectList
             projects={projects}
@@ -983,18 +1086,28 @@ export default function App() {
         confirmText={confirmConfig.confirmText}
       />
 
+      <QuestModal
+        isOpen={isQuestModalOpen}
+        onClose={() => {
+          setIsQuestModalOpen(false);
+          setSelectedQuestForEdit(null);
+        }}
+        onSave={handleSaveQuest}
+        initialQuest={selectedQuestForEdit}
+        categories={currentCategories}
+      />
+
       {/* High Density Status Footer */}
       <footer className="h-8 bg-[#141414] text-[#E4E3E0] flex items-center px-4 sm:px-6 justify-between text-[9px] sm:text-[10px] font-mono tracking-widest uppercase border-t-2 border-[#141414] mt-auto">
         <div className="flex items-center gap-4">
-          <span>SYSTEM_NODE: LOCAL_ENGINE_01</span>
           <span className="hidden sm:inline opacity-60">ENCRYPTION: LOCAL_PERSISTENCE ACTIVE</span>
         </div>
         <div className="flex items-center gap-4">
           <span className="text-green-400 font-bold flex items-center gap-1">
             <span className="inline-block w-1.5 h-1.5 rounded-full bg-green-400" />
-            JARVIS: LINKED
+            ACTIVE
           </span>
-          <span className="opacity-80">USER: {settings?.name ? settings.name.toUpperCase() : 'ROOT_DEV'}</span>
+          <span className="opacity-80">USER: {settings?.name ? settings.name.toUpperCase() : 'DEV'}</span>
         </div>
       </footer>
       {/* DSA Prompt Modal */}
