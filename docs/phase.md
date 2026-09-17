@@ -50,6 +50,23 @@
   - **Dual-Layer Optional Backlog Filter:** Filtered completed one-time tasks from Today's dashboard while preserving them in the main Tasks directory.
   - **Accurate Analytics Telemetry:** Classified Today's bar in `AnalyticsDashboard.tsx` and `backend/routes/index.js` dynamically as `in_progress` (or `partial`/`completed`) rather than falsely diagnosing active days as `no_progress` (REST).
 
+## Phase 7.5: Quests & Periodic Milestone Engine (COMPLETED)
+- **Goal:** Provide a dedicated, non-punitive cadence engine for long-horizon milestone commitments (such as monthly resume updates to force continuous learning, recurring finances, and quarterly retrospectives) without polluting daily binary streak rules or strike triggers.
+- **Architecture & Features Delivered:**
+  - **The Resume Forcing Function Origin:** Designed specifically to support habits that require regular execution over longer time horizons without creating daily task anxiety.
+  - **Isolated Backend Data Layer:** Dedicated `backend/models/Quest.js` schema with multi-tenancy `userId` indexing, and `/backend/routes/quests.js` with zero-trust auth middleware.
+  - **Dual Cadence Mechanics:**
+    - *Flexible Timing:* Next occurrence advances from completion date by the interval (e.g. 1 month after finishing).
+    - *Exact Day of Month:* Fixed calendar date anchor (e.g. 5th of every month) with safe end-of-month day clamping (e.g. Jan 31 -> Feb 28).
+  - **7-Day Grace Window:**
+    - Completions $\le 7$ days late maintain the fixed calendar day anchor for the following month.
+    - Completions $> 7$ days late reset the cycle from today's completion date to avoid compounding schedule crunch.
+  - **Dedicated UI Suite:**
+    - *Today Dashboard Section (`QuestSection.tsx`):* Sits directly beneath Required Daily Commitments with due/overdue tags and 1-click completion.
+    - *Dedicated Quests Page (`QuestList.tsx`):* Full navigation tab on Navbar with status filters (All, Due Now, Upcoming), schedule overview, and cycle completion history.
+    - *Creation Modal (`QuestModal.tsx`):* Plain-language setup modal explaining timing styles and interval frequencies.
+  - **Zero Streak/Strike Pollution:** Quests never increment `totalRequired` in daily summary calculations and never issue automated strikes upon midnight rollover.
+
 ## Phase 8: AI Agent Integration, Habit Coaching & Goal Roadmaps (NEXT PHASE)
 - **Goal:** Proactive AI co-pilot that assists with habit formation, goal decomposition, autonomous task adjustments, and productivity feedback.
 - **Key Capabilities Planned:**

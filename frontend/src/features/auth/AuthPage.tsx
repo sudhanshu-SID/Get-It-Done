@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { Mail, Lock, User, ArrowLeft, ArrowRight, AlertCircle, CheckCircle, Sparkles } from 'lucide-react';
+import { Mail, Lock, User, ArrowLeft, ArrowRight, AlertCircle, CheckCircle, Bot } from 'lucide-react';
 
 interface AuthPageProps {
   onAuthSuccess: () => void;
@@ -101,8 +101,12 @@ export const AuthPage: React.FC<AuthPageProps> = ({
             {/* Header */}
             <div className="mb-8">
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-neutral-100 text-neutral-800 text-xs font-medium mb-3">
-                <Sparkles className="w-3.5 h-3.5 text-neutral-600" />
+                <img src="/get-it-done_icon.png" alt="Logo" className="w-4 h-4 object-cover rounded-xs" />
                 <span>Get It Done v4.0</span>
+                <span className="inline-flex items-center gap-1 text-[10px] font-mono px-1.5 py-0.2 rounded-full bg-neutral-200/90 text-neutral-700 font-bold tracking-tight">
+                  <Bot className="w-3 h-3 text-neutral-800" />
+                  <span>AI</span>
+                </span>
               </div>
               <h1 className="text-2xl sm:text-3xl font-semibold text-neutral-900 tracking-tight">
                 {mode === 'login' && 'Welcome back'}

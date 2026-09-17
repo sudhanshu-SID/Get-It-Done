@@ -308,8 +308,12 @@ router.post('/tasks/:id/complete', async (req, res) => {
         if (!dailyRecord.completedTaskIds) dailyRecord.completedTaskIds = [];
         if (!dailyRecord.completedTaskIds.includes(task._id.toString())) {
           dailyRecord.completedTaskIds.push(task._id.toString());
-          await dailyRecord.save();
         }
+        if (dailyRecord.status === 'no_progress') {
+          dailyRecord.status = 'partial';
+          dailyRecord.evaluationId = null;
+        }
+        await dailyRecord.save();
       } else {
         await DailyRecord.create({
           userId: req.userId,
@@ -449,11 +453,19 @@ router.post('/timer/stop', async (req, res) => {
     if (timer.projectId) await Project.findOneAndUpdate({ _id: timer.projectId, userId: req.userId }, { $inc: { totalTimeMinutes: durationMins } });
 
     const todayStr = new Date().toISOString().split('T')[0];
-    await DailyRecord.findOneAndUpdate(
-      { userId: req.userId, date: todayStr },
-      { $inc: { totalWorkSeconds: totalSeconds } },
-      { upsert: true }
-    );
+    const rec = await DailyRecord.findOne({ userId: req.userId, date: todayStr });
+    if (rec && rec.status === 'no_progress') {
+      rec.status = 'partial';
+      rec.evaluationId = null;
+      rec.totalWorkSeconds = (rec.totalWorkSeconds || 0) + totalSeconds;
+      await rec.save();
+    } else {
+      await DailyRecord.findOneAndUpdate(
+        { userId: req.userId, date: todayStr },
+        { $inc: { totalWorkSeconds: totalSeconds } },
+        { upsert: true }
+      );
+    }
 
     await ActiveTimer.deleteMany({ userId: req.userId });
     res.json({ success: true, data: { session, task } });
@@ -514,8 +526,8 @@ router.get('/daily/today', async (req, res) => {
       userRollovers.set(req.userId, todayStr);
     }
 
-    const yesterday = new Date(startOfToday);
-    yesterday.setDate(yesterday.getDate() - 1);
+    const [y, m, d] = todayStr.split('-').map(Number);
+    const yesterday = new Date(Date.UTC(y, m - 1, d - 1));
     const yesterdayStr = yesterday.toISOString().split('T')[0];
 
     // Fetch all read-only dashboard data concurrently with .lean() for fast retrieval
@@ -643,13 +655,50 @@ router.post('/daily/today/no-progress', async (req, res) => {
         dailyNote: req.body?.note || 'Break / Rest Day',
         requiredTaskIds: [],
         completedTaskIds: [],
-        missedTaskIds: []
+        missedTaskIds: [],
+        evaluationId: `rest-${todayStr}`
       });
     } else {
       record.status = 'no_progress';
+      record.missedTaskIds = [];
+      record.evaluationId = `rest-${todayStr}`;
       if (req.body?.note) record.dailyNote = req.body.note;
       await record.save();
     }
+
+    // Auto-remove any accidental/misattributed strikes created for today
+    const deletedStrikes = await Strike.deleteMany({
+      userId: req.userId,
+      date: todayStr,
+      status: 'open'
+    });
+    if (deletedStrikes.deletedCount > 0) {
+      const remainingStrikes = await Strike.countDocuments({ userId: req.userId, status: 'open' });
+      await Gamification.findOneAndUpdate(
+        { userId: req.userId },
+        { $set: { currentStrikes: remainingStrikes } }
+      );
+    }
+
+    res.json({ success: true, data: record });
+  } catch (e) {
+    res.status(500).json({ success: false, message: e.message });
+  }
+});
+
+router.post('/daily/today/undo-no-progress', async (req, res) => {
+  try {
+    const todayStr = new Date().toISOString().split('T')[0];
+    let record = await DailyRecord.findOne({ userId: req.userId, date: todayStr });
+    if (!record) {
+      return res.json({ success: true, data: null });
+    }
+
+    const hasWork = (record.completedTaskIds?.length || 0) > 0 || (record.totalWorkSeconds || 0) > 0;
+    record.status = hasWork ? 'partial' : 'in_progress';
+    record.evaluationId = null;
+    await record.save();
+
     res.json({ success: true, data: record });
   } catch (e) {
     res.status(500).json({ success: false, message: e.message });
@@ -829,16 +878,18 @@ router.get('/analytics', async (req, res) => {
 
       const isTodayDate = dateStr === formatLocalDate(now);
       let dayStatus = record?.status;
-      if (!dayStatus) {
-        if (isTodayDate) {
-          if (totalRequiredCount > 0 && completedRequiredCount >= totalRequiredCount) {
-            dayStatus = 'completed';
-          } else if (completedRequiredCount > 0 || finalMins > 0) {
-            dayStatus = 'partial';
-          } else {
-            dayStatus = 'in_progress';
-          }
+      if (isTodayDate) {
+        if (totalRequiredCount > 0 && completedRequiredCount >= totalRequiredCount) {
+          dayStatus = 'completed';
+        } else if (completedRequiredCount > 0 || finalMins > 0) {
+          dayStatus = 'partial';
+        } else if (record?.status === 'no_progress') {
+          dayStatus = 'no_progress';
         } else {
+          dayStatus = 'in_progress';
+        }
+      } else {
+        if (!dayStatus) {
           dayStatus = finalMins > 0 ? 'partial' : 'no_progress';
         }
       }

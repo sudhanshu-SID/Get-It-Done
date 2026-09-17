@@ -12,7 +12,8 @@ import {
   UserSettings,
   TodayDashboardData,
   AnalyticsSummary,
-  Note
+  Note,
+  Quest
 } from '../types/index';
 
 export type BackendStatus = 'operational' | 'sleeping' | 'checking';
@@ -102,6 +103,10 @@ export const apiService = {
     fetchJson<DailyRecord>('/api/daily/today/no-progress', {
       method: 'POST',
       body: JSON.stringify({ note: note || dateOrNote })
+    }),
+  undoNoProgress: () =>
+    fetchJson<DailyRecord>('/api/daily/today/undo-no-progress', {
+      method: 'POST'
     }),
   saveDailyNote: (dateOrNote: string, noteOrDate?: string) => {
     let note = dateOrNote;
@@ -331,6 +336,27 @@ export const apiService = {
       headers: {
         Authorization: `Bearer ${apiKey}`
       }
+    }),
+
+  // Quests (Periodic milestone commitments)
+  getQuests: () => fetchJson<Quest[]>('/api/quests'),
+  createQuest: (quest: Partial<Quest>) =>
+    fetchJson<Quest>('/api/quests', {
+      method: 'POST',
+      body: JSON.stringify(quest)
+    }),
+  updateQuest: (id: string, updates: Partial<Quest>) =>
+    fetchJson<Quest>(`/api/quests/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(updates)
+    }),
+  completeQuest: (id: string) =>
+    fetchJson<Quest>(`/api/quests/${id}/complete`, {
+      method: 'POST'
+    }),
+  deleteQuest: (id: string) =>
+    fetchJson<{ success: boolean }>(`/api/quests/${id}`, {
+      method: 'DELETE'
     })
 };
 

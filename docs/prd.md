@@ -35,6 +35,14 @@ Developers, students, and professionals who struggle with procrastination and ne
 - **Click-to-Wake Reconnect:** Allows immediate on-demand wake-up of sleeping cloud backends without browser reloading.
 - **Zero-Waste Quota Management:** Avoids 24/7 background polling while utilizing a 9-minute keepalive heartbeat during active timers.
 
+### 3.6 Quests (Periodic Milestone Commitments)
+- **Long-Horizon Forcing Functions:** Designed for recurring milestones (like monthly resume updates, financial reviews, or dental checkups) that force continuous skill acquisition and accountability.
+- **Dual Schedule Mechanics:**
+  - *Flexible Timing:* Occurs $N$ months after you complete it.
+  - *Exact Day of Month:* Tied to an exact calendar day (e.g. 5th of each month).
+- **7-Day Grace Window:** Completions within 7 days keep the calendar day rhythm; completions past 7 days reset the cycle from completion date to prevent schedule debt.
+- **Non-Punitive & Streak-Safe:** Never increments daily required counts and never generates strikes or breaks streaks upon rollover.
+
 ## 4. Technical Stack
 - **Frontend:** React, TypeScript, Vite, TailwindCSS (v4).
 - **Backend:** Node.js, Express, JavaScript, MongoDB Atlas.

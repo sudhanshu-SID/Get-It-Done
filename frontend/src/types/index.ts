@@ -338,3 +338,29 @@ export interface Note {
   createdAt: string;
   updatedAt: string;
 }
+
+export type QuestRepeatInterval = 'monthly' | 'quarterly' | 'yearly';
+export type QuestScheduleType = 'flexible' | 'fixed_date';
+
+export interface QuestCompletionHistory {
+  completedAt: string;
+  scheduledDate: string;
+}
+
+export interface Quest {
+  _id: string;
+  userId: string;
+  title: string;
+  description?: string;
+  category: string;
+  repeatInterval: QuestRepeatInterval;
+  scheduleType: QuestScheduleType;
+  targetDayOfMonth: number;
+  nextDueDate: string;
+  lastCompletedAt?: string | null;
+  completionHistory?: QuestCompletionHistory[];
+  status: 'active' | 'paused' | 'archived';
+  createdAt?: string;
+  updatedAt?: string;
+}
+

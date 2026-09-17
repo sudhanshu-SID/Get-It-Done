@@ -13,7 +13,9 @@ app.use(express.json());
 // API Routes Hub
 const authRoutes = require('./routes/auth');
 const apiRoutes = require('./routes/index');
+const questRoutes = require('./routes/quests');
 app.use('/api/auth', authRoutes);
+app.use('/api/quests', questRoutes);
 app.use('/api', apiRoutes);
 
 // Database Connection

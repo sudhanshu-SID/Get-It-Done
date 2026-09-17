@@ -14,8 +14,9 @@ The application uses a secured Client-Server model with a decoupled REST API and
 │   ├── /src
 │   │   ├── /components     # Reusable UI components (Navbar, Modals, Spinners)
 │   │   ├── /context        # Global contexts (AuthContext.tsx)
-│   │   ├── /features       # Domain features (today, analytics, auth, goals, strikes, rewards, projects)
-│   │   │   └── /auth       # Light Split-Screen Auth Cockpit (AuthPage.tsx)
+│   │   ├── /features       # Domain features (today, tasks, quests, analytics, auth, goals, strikes, rewards, projects)
+│   │   │   ├── /auth       # Light Split-Screen Auth Cockpit (AuthPage.tsx)
+│   │   │   └── /quests     # Dedicated Quests page, today section, and creation modal
 │   │   ├── /services       # Typed Fetch API clients & status listeners
 │   │   │   └── /auth       # Firebase Auth services & interfaces
 │   │   └── /types          # TypeScript interfaces & domain types
@@ -23,9 +24,9 @@ The application uses a secured Client-Server model with a decoupled REST API and
 │
 ├── /backend                # Express API (JavaScript)
 │   ├── /middleware         # Zero-trust auth middleware (auth.js verifying Bearer tokens)
-│   ├── /models             # Mongoose schemas with indexed userId (User, Task, Strike, Consequence, etc.)
+│   ├── /models             # Mongoose schemas with indexed userId (User, Task, Quest, Strike, Consequence, etc.)
 │   ├── /services           # Domain services (dailyService, strikeService, consequenceService, etc.)
-│   ├── /routes             # Express routers (index.js, auth.js)
+│   ├── /routes             # Express routers (index.js, auth.js, quests.js)
 │   ├── /scripts            # Utility scripts (backupData.js)
 │   └── server.js
 │
@@ -54,3 +55,14 @@ The application uses a secured Client-Server model with a decoupled REST API and
 3. **Timer-Bound Keep-Alive:** While an active stopwatch timer is running, the client sends a background keep-alive ping to `/api/health` every 9 minutes to prevent cloud instances (Render) from spinning down during focus sessions.
 4. **Routing & Concurrency:** Requests hit `/backend/routes/index.js`, executing concurrent `.lean()` queries with `Promise.all` across MongoDB Atlas collections scoped by `userId`.
 5. **Response & Optimistic Recovery:** JSON data is returned to the frontend. In case of unexpected server cold-starts, pending timer stops are preserved optimistically in `localStorage` until the server handshakes.
+
+## 5. Quests (Periodic Milestone Commitments) Architecture
+1. **Isolated Data Model (`backend/models/Quest.js`):** Quests are stored in a dedicated collection decoupled from daily `Task` records. This ensures that long-horizon recurring items never interfere with the daily task lifecycle, binary streak calculations, or automated strikes.
+2. **Non-Punitive Persistence:** Quests due on or before today appear in a dedicated section on the `TodayDashboard` directly below Required Commitments, and also on the full `/quests` directory page. Leaving a Quest incomplete at midnight does NOT trigger strikes or break streaks.
+3. **Dual Schedule Mechanics:**
+   - **Flexible Timing:** Advances by the interval (e.g., 1 month) from the actual completion date.
+   - **Exact Day of Month:** Anchors recurring occurrences to a specific calendar date (1–31) with safe month-end clamping (e.g. Jan 31 -> Feb 28).
+4. **7-Day Grace Window:**
+   - Completed within 7 days of due date: Maintains the fixed monthly calendar anchor.
+   - Completed $> 7$ days late: Resets the cadence from the completion date to give the user a full month buffer and prevent compressed schedules.
+5. **Full Multi-Tenancy:** All routes in `/backend/routes/quests.js` require Bearer authentication and scope all queries strictly by `req.userId`.
