@@ -390,6 +390,16 @@ class DailyService {
       }
       
       if (record) {
+        const hasWork = (record.completedTaskIds?.length || 0) > 0 || (record.totalWorkSeconds || 0) > 0;
+        if (!hasWork) {
+          record.status = 'no_progress';
+          record.evaluationId = `rest-${pastDateStr}`;
+          record.evaluationRunAt = new Date();
+          record.missedTaskIds = [];
+          await record.save();
+          continue;
+        }
+
         if (record.status === 'no_progress') {
           if (!record.evaluationId) {
             record.evaluationId = `rest-${pastDateStr}`;

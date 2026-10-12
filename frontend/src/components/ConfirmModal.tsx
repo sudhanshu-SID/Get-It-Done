@@ -4,8 +4,10 @@ import { X, AlertTriangle } from 'lucide-react';
 interface ConfirmModalProps {
   isOpen: boolean;
   title: string;
-  description: string;
+  description?: string;
+  message?: string;
   confirmLabel?: string;
+  confirmText?: string;
   cancelLabel?: string;
   isDestructive?: boolean;
   onConfirm: () => void;
@@ -16,13 +18,18 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
   isOpen,
   title,
   description,
-  confirmLabel = 'Confirm',
+  message,
+  confirmLabel,
+  confirmText,
   cancelLabel = 'Cancel',
   isDestructive = false,
   onConfirm,
   onClose
 }) => {
   if (!isOpen) return null;
+
+  const displayMessage = message || description || '';
+  const displayConfirm = confirmText || confirmLabel || 'Confirm';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-xs p-4">
@@ -44,7 +51,7 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
           </button>
         </div>
 
-        <p className="mt-3 text-xs leading-relaxed text-neutral-300">{description}</p>
+        <p className="mt-3 text-xs leading-relaxed text-neutral-300">{displayMessage}</p>
 
         <div className="mt-6 flex items-center justify-end space-x-2.5">
           <button
@@ -64,7 +71,7 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
                 : 'bg-emerald-600 hover:bg-emerald-500'
             }`}
           >
-            {confirmLabel}
+            {displayConfirm}
           </button>
         </div>
       </div>

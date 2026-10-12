@@ -174,9 +174,13 @@ class TaskSessionService {
   async updateDailyRecordTime(seconds) {
     checkDB();
     const today = startOfDay(new Date());
+    const todayStr = format(today, 'yyyy-MM-dd');
     await DailyRecord.findOneAndUpdate(
-      { date: today },
-      { $inc: { totalWorkSeconds: seconds } },
+      { date: todayStr },
+      { 
+        $inc: { totalWorkSeconds: seconds },
+        $setOnInsert: { status: 'in_progress' }
+      },
       { upsert: true }
     );
   }

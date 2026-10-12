@@ -141,6 +141,7 @@ export default function App() {
     title: string;
     message: string;
     confirmText?: string;
+    isDestructive?: boolean;
     onConfirm: () => Promise<void>;
   }>({
     isOpen: false,
@@ -385,6 +386,27 @@ export default function App() {
     } catch (err) {
       console.error('Error completing task', err);
     }
+  };
+
+  const handleEndCommitment = (task: Task) => {
+    setConfirmConfig({
+      isOpen: true,
+      title: 'End Daily Commitment',
+      message: `Are you sure you want to end "${task.title}"?`,
+      confirmText: 'End Commitment',
+      isDestructive: true,
+      onConfirm: async () => {
+        try {
+          if (activeTimer?.taskId === task._id) {
+            await handleStopTimer();
+          }
+          await apiService.concludeTask(task._id);
+          await refreshAllData();
+        } catch (err) {
+          console.error('Error ending commitment', err);
+        }
+      }
+    });
   };
 
   const handleUncompleteTask = async (taskId: string) => {
@@ -752,6 +774,9 @@ export default function App() {
             onCompleteTask={async task => {
               requireAuth(() => handleCompleteTask(task));
             }}
+            onEndCommitment={async task => {
+              requireAuth(() => handleEndCommitment(task));
+            }}
             onUncompleteTask={async taskId => {
               requireAuth(() => handleUncompleteTask(taskId));
             }}
@@ -1084,6 +1109,7 @@ export default function App() {
         title={confirmConfig.title}
         message={confirmConfig.message}
         confirmText={confirmConfig.confirmText}
+        isDestructive={confirmConfig.isDestructive}
       />
 
       <QuestModal

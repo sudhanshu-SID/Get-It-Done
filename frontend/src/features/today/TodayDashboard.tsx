@@ -37,6 +37,7 @@ interface TodayDashboardProps {
   onResolveConsequence?: (id: string) => Promise<void>;
   onNavigateToStrikes?: () => void;
   onCompleteTask: (task: Task) => Promise<void>;
+  onEndCommitment?: (task: Task) => Promise<void>;
   onUncompleteTask: (taskId: string) => Promise<void>;
   onStartTimer: (taskId: string) => Promise<void>;
   onPauseTimer: () => void;
@@ -64,6 +65,7 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
   onResolveConsequence,
   onNavigateToStrikes,
   onCompleteTask,
+  onEndCommitment,
   onUncompleteTask,
   onStartTimer,
   onPauseTimer,
@@ -398,7 +400,18 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
                       }`}
                     >
                       <div className="flex items-start justify-between gap-3">
-                        <div className="flex items-start space-x-3 flex-1 min-w-0">
+                        <div className="flex items-start space-x-2.5 flex-1 min-w-0">
+                          {onEndCommitment && (
+                            <button
+                              id={`end-commitment-${task._id}-btn`}
+                              onClick={() => onEndCommitment(task)}
+                              title="End Commitment (Mark completed, switch to optional, and end daily recurrence)"
+                              className="mt-0.5 w-6 h-6 rounded bg-red-400 hover:bg-red-500 active:bg-red-600 text-white font-mono font-bold text-[9px] flex items-center justify-center shrink-0 shadow-xs cursor-pointer transition-colors"
+                            >
+                              End
+                            </button>
+                          )}
+
                           <button
                             id={`complete-task-${task._id}-btn`}
                             onClick={() => isCompleted ? onUncompleteTask(task._id) : onCompleteTask(task)}

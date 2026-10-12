@@ -36,6 +36,9 @@ router.route('/tasks/:id')
 router.route('/tasks/:id/complete')
   .post(taskController.completeTask);
 
+router.route('/tasks/:id/conclude')
+  .post(taskController.concludeTask);
+
 router.route('/tasks/:id/reschedule')
   .post(taskController.rescheduleTask);
 

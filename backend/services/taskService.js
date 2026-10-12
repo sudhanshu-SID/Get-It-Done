@@ -80,6 +80,26 @@ class TaskService {
     return task;
   }
 
+  async concludeTask(id) {
+    checkDB();
+    const task = await Task.findByIdAndUpdate(
+      id,
+      {
+        status: 'completed',
+        completedAt: new Date().toISOString(),
+        commitmentLevel: 'optional',
+        recurrence: 'none'
+      },
+      { returnDocument: 'after' }
+    ).populate('projectId');
+
+    if (task) {
+      await this.handleTaskCompletion(task);
+    }
+
+    return task;
+  }
+
   async handleTaskCompletion(task) {
     checkDB();
     const today = startOfDay(new Date());
@@ -115,7 +135,7 @@ class TaskService {
     
     let status = 'partial';
     if (requiredTotal === 0 && dailyRecord.totalWorkSeconds === 0) {
-      status = 'no_progress';
+      status = (dailyRecord.status === 'no_progress' && dailyRecord.evaluationId?.startsWith('rest-')) ? 'no_progress' : 'in_progress';
     } else if (requiredTotal > 0 && completedRequired === requiredTotal) {
       status = 'completed';
     }

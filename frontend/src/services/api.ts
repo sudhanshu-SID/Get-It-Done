@@ -153,6 +153,11 @@ export const apiService = {
       method: 'POST',
       body: data ? JSON.stringify(data) : undefined
     }),
+  concludeTask: (id: string, data?: any) =>
+    fetchJson<Task>(`/api/tasks/${id}/conclude`, {
+      method: 'POST',
+      body: data ? JSON.stringify(data) : undefined
+    }),
   uncompleteTask: (id: string) =>
     fetchJson<Task>(`/api/tasks/${id}/uncomplete`, {
       method: 'POST'

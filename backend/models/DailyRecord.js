@@ -8,7 +8,7 @@ const DailyRecordSchema = new mongoose.Schema({
   completedTaskIds: [String],
   missedTaskIds: [String],
   totalWorkSeconds: { type: Number, default: 0 },
-  status: { type: String, enum: ['completed', 'partial', 'no_progress', 'in_progress'], default: 'no_progress' },
+  status: { type: String, enum: ['completed', 'partial', 'no_progress', 'in_progress'], default: 'in_progress' },
   dailyNote: String,
   evaluationId: String,
   evaluationRunAt: Date

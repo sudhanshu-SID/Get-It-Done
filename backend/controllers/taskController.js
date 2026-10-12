@@ -71,6 +71,16 @@ exports.completeTask = async (req, res) => {
   }
 };
 
+exports.concludeTask = async (req, res) => {
+  try {
+    const task = await taskService.concludeTask(req.params.id);
+    if (!task) return res.status(404).json({ success: false, message: 'Task not found' });
+    res.json({ success: true, data: task });
+  } catch (error) {
+    handleError(res, error, 'Failed to conclude task');
+  }
+};
+
 exports.getTodayTasks = async (req, res) => {
   try {
     const tasks = await taskService.getTodayTasks();

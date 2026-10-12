@@ -67,7 +67,7 @@ function computeStreakMetrics(allRecords, todaySummary, todayRecord, storedLonge
   // Today's contribution:
   const todayAllCompleted = (todaySummary?.totalRequired || 0) > 0 &&
     (todaySummary?.completedRequired || 0) >= (todaySummary?.totalRequired || 0);
-  const todayIsRest = todayRecord?.status === 'no_progress';
+  const todayIsRest = todayRecord?.status === 'no_progress' && todayRecord?.evaluationId === `rest-${todayStr}`;
 
   let currentStreak = streakCount;
   if (todayAllCompleted) {
@@ -328,6 +328,77 @@ router.post('/tasks/:id/complete', async (req, res) => {
   }
   catch (e) { res.status(500).json({ success: false, message: e.message }); }
 });
+
+router.post('/tasks/:id/conclude', async (req, res) => {
+  try {
+    const updateData = {
+      status: 'completed',
+      completedAt: new Date().toISOString(),
+      commitmentLevel: 'optional',
+      recurrence: 'none'
+    };
+    if (req.body && req.body.questionsSolved) {
+      updateData.questionsSolved = req.body.questionsSolved;
+    }
+    const task = await Task.findOneAndUpdate(
+      { _id: req.params.id, userId: req.userId },
+      updateData,
+      { returnDocument: 'after' }
+    );
+
+    if (task) {
+      const goals = await Goal.find({ userId: req.userId, status: 'active', category: task.category });
+      for (const goal of goals) {
+        if (task.questionsSolved && (goal.type === 'metric_count' || goal.type === 'task_count')) {
+          goal.currentValue += task.questionsSolved;
+        } else if (goal.type === 'task_count') {
+          goal.currentValue += 1;
+        } else {
+          continue;
+        }
+
+        if (goal.currentValue >= goal.targetValue) {
+          goal.status = 'achieved';
+          await Reward.updateMany(
+            { userId: req.userId, linkedGoalId: goal._id.toString(), status: 'locked' },
+            { $set: { status: 'unlocked', unlockedAt: new Date().toISOString() } }
+          );
+        }
+        await goal.save();
+      }
+
+      const todayStr = new Date().toISOString().split('T')[0];
+      let dailyRecord = await DailyRecord.findOne({ userId: req.userId, date: todayStr });
+      if (dailyRecord) {
+        if (!dailyRecord.completedTaskIds) dailyRecord.completedTaskIds = [];
+        if (!dailyRecord.completedTaskIds.includes(task._id.toString())) {
+          dailyRecord.completedTaskIds.push(task._id.toString());
+        }
+        if (dailyRecord.requiredTaskIds) {
+          dailyRecord.requiredTaskIds = dailyRecord.requiredTaskIds.filter(id => id.toString() !== task._id.toString());
+        }
+        if (dailyRecord.missedTaskIds) {
+          dailyRecord.missedTaskIds = dailyRecord.missedTaskIds.filter(id => id.toString() !== task._id.toString());
+        }
+        if (dailyRecord.status === 'no_progress') {
+          dailyRecord.status = 'partial';
+          dailyRecord.evaluationId = null;
+        }
+        await dailyRecord.save();
+      } else {
+        await DailyRecord.create({
+          userId: req.userId,
+          date: todayStr,
+          completedTaskIds: [task._id.toString()],
+          status: 'partial'
+        });
+      }
+    }
+
+    res.json({ success: true, data: task });
+  }
+  catch (e) { res.status(500).json({ success: false, message: e.message }); }
+});
 router.post('/tasks/:id/uncomplete', async (req, res) => {
   try {
     const task = await Task.findOne({ _id: req.params.id, userId: req.userId });
@@ -364,7 +435,7 @@ router.post('/tasks/:id/uncomplete', async (req, res) => {
       if (dailyRecord && dailyRecord.completedTaskIds) {
         dailyRecord.completedTaskIds = dailyRecord.completedTaskIds.filter(id => id !== task._id.toString());
         if (dailyRecord.completedTaskIds.length === 0 && dailyRecord.totalWorkSeconds === 0) {
-          dailyRecord.status = 'no_progress';
+          dailyRecord.status = 'in_progress';
         }
         await dailyRecord.save();
       }
@@ -637,7 +708,7 @@ router.get('/daily/today', async (req, res) => {
         })),
         recentStrikes,
         dailyNote: todayRecord?.dailyNote || '',
-        noProgressToday: todayRecord?.status === 'no_progress'
+        noProgressToday: Boolean(todayRecord?.status === 'no_progress' && todayRecord?.evaluationId === `rest-${todayStr}`)
       }
     });
   } catch (e) { res.status(500).json({ success: false, message: e.message }); }
@@ -710,7 +781,7 @@ router.post('/daily/note', async (req, res) => {
     const note = req.body.note || '';
     const record = await DailyRecord.findOneAndUpdate(
       { userId: req.userId, date: todayStr },
-      { $set: { dailyNote: note } },
+      { $set: { dailyNote: note }, $setOnInsert: { status: 'in_progress' } },
       { returnDocument: 'after', upsert: true }
     );
     res.json({ success: true, data: record });
