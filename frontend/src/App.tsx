@@ -315,18 +315,16 @@ export default function App() {
     }
   }, [activeTab, loadTabData]);
 
-  // Heartbeat: Ping backend every 9 minutes while a timer is running to prevent Render from going to sleep
+  // Heartbeat: Ping backend every 14 minutes to prevent Render from going to sleep while app is open
   useEffect(() => {
-    if (!activeTimer || activeTimer.status !== 'running') return;
-
     const interval = setInterval(() => {
       apiService.ping().catch(err => {
         console.debug('Heartbeat ping failed:', err);
       });
-    }, 9 * 60 * 1000);
+    }, 14 * 60 * 1000);
 
     return () => clearInterval(interval);
-  }, [activeTimer?.status]);
+  }, []);
 
   // Subscribe to live backend connectivity / sleep state
   useEffect(() => {

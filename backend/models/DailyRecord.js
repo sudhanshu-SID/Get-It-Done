@@ -14,4 +14,6 @@ const DailyRecordSchema = new mongoose.Schema({
   evaluationRunAt: Date
 }, { timestamps: true });
 
+DailyRecordSchema.index({ userId: 1, date: 1 }, { unique: true });
+
 module.exports = mongoose.model('DailyRecord', DailyRecordSchema);

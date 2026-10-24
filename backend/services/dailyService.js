@@ -63,7 +63,16 @@ class DailyService {
       ...(userId ? { userId } : {})
     });
     
-    return record.save();
+    try {
+      return await record.save();
+    } catch (err) {
+      if (err.code === 11000) {
+        const query = { date: todayStr };
+        if (userId) query.userId = userId;
+        return DailyRecord.findOne(query);
+      }
+      throw err;
+    }
   }
 
   async getYesterdayRecord(userId) {
@@ -385,8 +394,21 @@ class DailyService {
           record.evaluationId = `rest-${pastDateStr}`;
           record.evaluationRunAt = new Date();
         }
-        await record.save();
-        recordMap.set(pastDateStr, record);
+
+        try {
+          await record.save();
+        } catch (err) {
+          if (err.code === 11000) {
+            const query = { date: pastDateStr };
+            if (userId) query.userId = userId;
+            record = await DailyRecord.findOne(query);
+          } else {
+            throw err;
+          }
+        }
+        if (record) {
+          recordMap.set(pastDateStr, record);
+        }
       }
       
       if (record) {
